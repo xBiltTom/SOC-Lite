@@ -79,7 +79,6 @@ services:
     environment:
       SIMULATOR_WEBHOOK_URL: http://n8n:5678/webhook/soc-lite-ingest
       SIMULATOR_INTERVAL_SECONDS: ${SIMULATOR_INTERVAL_SECONDS:-30}
-      SIMULATOR_SCENARIOS: ${SIMULATOR_SCENARIOS:-ssh,ransomware,benign}
     depends_on:
       - n8n
 

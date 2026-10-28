@@ -1,0 +1,163 @@
+"""Catálogo de situaciones ficticias para el laboratorio SOC."""
+
+# Cada grupo define activo, puerto, criticidad y situaciones con nivel de regla.
+GROUPS = [
+    ("auth", "SRV-AUTH01", 22, 4, [
+        ("password_spray", "Password spraying: intentos con la misma contraseña en varias cuentas", 11),
+        ("account_lockout", "Bloqueo de varias cuentas tras intentos fallidos repetidos", 10),
+        ("disabled_account", "Intento de acceso a una cuenta deshabilitada", 10),
+        ("root_login", "Inicio de sesión directo con la cuenta root desde una dirección externa", 12),
+        ("new_location", "Inicio de sesión desde una ubicación no habitual", 9),
+        ("impossible_travel", "Inicios de sesión de una cuenta desde ubicaciones distantes en poco tiempo", 11),
+        ("mfa_failures", "Múltiples solicitudes de autenticación multifactor rechazadas", 10),
+        ("service_account", "Cuenta de servicio usada para un inicio de sesión interactivo", 11),
+    ]),
+    ("identity", "SRV-AD01", 389, 5, [
+        ("admin_group", "Una cuenta fue agregada al grupo de administradores del dominio", 12),
+        ("new_admin", "Creación de una cuenta con privilegios administrativos", 12),
+        ("password_reset", "Restablecimiento de contraseña de una cuenta privilegiada", 10),
+        ("audit_disabled", "Desactivación de la auditoría de seguridad del directorio", 13),
+        ("policy_change", "Modificación inesperada de una política de contraseñas", 11),
+        ("account_reenabled", "Reactivación de una cuenta previamente deshabilitada", 9),
+        ("privileged_login", "Inicio de sesión privilegiado desde una estación no habitual", 11),
+        ("permission_change", "Cambio de permisos sobre una unidad organizativa sensible", 10),
+    ]),
+    ("web", "SRV-WEB01", 443, 5, [
+        ("sql_injection", "Posible SQL injection en parámetros del portal web", 12),
+        ("xss", "Posible XSS en un formulario de la aplicación", 10),
+        ("path_traversal", "Intento de path traversal para leer archivos del servidor", 12),
+        ("command_injection", "Posible inyección de comandos en una petición web", 13),
+        ("admin_scan", "Exploración repetida de rutas administrativas del portal", 9),
+        ("web_shell", "Posible web shell detectada en el directorio público", 14),
+        ("upload_executable", "Carga de un archivo ejecutable mediante un formulario web", 11),
+        ("server_errors", "Aumento inusual de errores del servidor desde un mismo origen", 8),
+    ]),
+    ("endpoint", "WKS-OPERACIONES01", 443, 4, [
+        ("encoded_powershell", "PowerShell ejecutado con un comando codificado", 12),
+        ("script_download", "PowerShell descargó un script desde un dominio desconocido", 12),
+        ("macro_process", "Un documento de Office inició un proceso de comandos", 12),
+        ("new_service", "Creación inesperada de un servicio en una estación de trabajo", 11),
+        ("scheduled_task", "Creación de una tarea programada fuera de la ventana habitual", 10),
+        ("security_disabled", "Desactivación de la protección del endpoint", 13),
+        ("credential_dump", "Posible acceso no autorizado al almacén de credenciales", 13),
+        ("remote_tool", "Ejecución de una herramienta de administración remota no registrada", 10),
+    ]),
+    ("malware", "WKS-FINANZAS01", 443, 5, [
+        ("ransom_note", "Nota de rescate detectada en un directorio compartido", 14),
+        ("file_encryption", "Cambio masivo de extensiones de archivos en una estación", 14),
+        ("malicious_archive", "Archivo comprimido descargado contiene un ejecutable sospechoso", 10),
+        ("trojan_detected", "Detección de un posible troyano en una estación de trabajo", 13),
+        ("quarantine_failed", "El antivirus no pudo poner en cuarentena un archivo sospechoso", 12),
+        ("usb_execution", "Ejecución de un programa desde una unidad USB recién conectada", 10),
+        ("startup_persistence", "Programa desconocido agregado al inicio automático", 11),
+        ("process_injection", "Posible inyección de código en un proceso del sistema", 13),
+    ]),
+    ("network", "FW-PERIMETRO", 443, 4, [
+        ("horizontal_scan", "Escaneo horizontal detectado contra varios equipos internos", 10),
+        ("vertical_scan", "Escaneo de múltiples puertos de un servidor interno", 10),
+        ("repeated_denies", "Firewall bloqueó múltiples conexiones del mismo origen", 8),
+        ("outbound_denied", "Conexión saliente bloqueada hacia un puerto no autorizado", 8),
+        ("internal_rdp", "Múltiples conexiones RDP entre estaciones de trabajo", 11),
+        ("smb_spread", "Conexiones SMB inusuales desde un equipo a varios servidores", 12),
+        ("beaconing", "Conexiones periódicas a un destino externo desconocido", 11),
+        ("remote_access", "Conexión remota a un servicio expuesto fuera del horario habitual", 10),
+    ]),
+    ("dns", "SRV-DNS01", 53, 4, [
+        ("new_domain", "Consulta DNS a un dominio recientemente registrado", 8),
+        ("many_subdomains", "Número inusual de subdominios consultados por un equipo", 10),
+        ("long_queries", "Consultas DNS con nombres anormalmente largos", 11),
+        ("nxdomain_burst", "Incremento de respuestas DNS para dominios inexistentes", 9),
+        ("external_resolver", "Estación utiliza un resolvedor DNS externo no autorizado", 9),
+        ("blocked_domain", "Consulta a un dominio bloqueado por la política de seguridad", 10),
+        ("dns_changes", "Cambio inesperado de la configuración DNS de un equipo", 10),
+        ("rare_tld", "Consultas repetidas a dominios de una extensión poco habitual", 8),
+    ]),
+    ("data", "SRV-FILE01", 445, 5, [
+        ("bulk_download", "Descarga masiva de documentos desde un recurso compartido", 11),
+        ("bulk_deletion", "Eliminación masiva de archivos en un directorio compartido", 12),
+        ("sensitive_access", "Acceso inusual a archivos marcados como confidenciales", 10),
+        ("public_share", "Recurso compartido configurado con acceso abierto a todos los usuarios", 11),
+        ("archive_created", "Creación de un archivo comprimido grande con documentos sensibles", 10),
+        ("external_transfer", "Transferencia inusual de datos hacia un destino externo", 12),
+        ("backup_deleted", "Eliminación inesperada de un respaldo de archivos", 13),
+        ("permission_expanded", "Ampliación de permisos de escritura en un directorio sensible", 10),
+    ]),
+    ("database", "SRV-DB01", 5432, 5, [
+        ("failed_logins", "Múltiples fallos de autenticación en la base de datos", 10),
+        ("admin_login", "Acceso administrativo a la base de datos desde un equipo no habitual", 12),
+        ("large_export", "Exportación de un volumen inusual de registros de la base de datos", 11),
+        ("user_created", "Creación inesperada de un usuario de base de datos", 10),
+        ("grant_admin", "Concesión de privilegios elevados a un usuario de base de datos", 12),
+        ("table_deleted", "Eliminación inesperada de una tabla de base de datos", 13),
+        ("audit_stopped", "Registro de auditoría de la base de datos detenido", 12),
+        ("unusual_query", "Consulta inusual a varias tablas con datos sensibles", 10),
+    ]),
+    ("email", "SRV-MAIL01", 25, 4, [
+        ("phishing_link", "Correo con enlace sospechoso recibido por varios usuarios", 10),
+        ("malicious_attachment", "Correo con archivo adjunto potencialmente malicioso", 11),
+        ("spoofed_sender", "Correo con remitente que suplanta un dominio corporativo", 10),
+        ("failed_auth", "Múltiples fallos de autenticación contra el servidor de correo", 10),
+        ("forwarding_rule", "Regla de reenvío externo creada en un buzón corporativo", 11),
+        ("mass_send", "Envío masivo de correos desde una cuenta interna", 11),
+        ("mailbox_delegation", "Concesión de acceso a un buzón a un usuario inesperado", 10),
+        ("suspicious_login", "Acceso a un buzón desde una ubicación no habitual", 9),
+    ]),
+    ("system", "SRV-APP01", 443, 4, [
+        ("log_cleared", "Borrado inesperado de registros de seguridad del sistema", 12),
+        ("config_changed", "Cambio de configuración de seguridad fuera de mantenimiento", 10),
+        ("agent_offline", "Agente de monitoreo dejó de enviar eventos", 9),
+        ("disk_full", "Uso de disco elevado en un servidor de registros", 7),
+        ("certificate_expiry", "Certificado de un servicio crítico próximo a vencer", 7),
+        ("unexpected_reboot", "Reinicio inesperado de un servidor de aplicación", 8),
+        ("backup_failure", "Fallo en la tarea programada de respaldo", 8),
+        ("integrity_change", "Cambio inesperado en un archivo protegido del sistema", 11),
+    ]),
+    ("medium_ops", "SRV-MON01", 443, 3, [
+        ("agent_unstable", "Agente de monitoreo se desconectó varias veces durante la última hora", 8),
+        ("backup_delayed", "Respaldo nocturno terminó con retraso y requiere revisión", 7),
+        ("cert_short_expiry", "Certificado de un servicio interno vence dentro de siete días", 7),
+        ("repeated_denied", "Conexiones repetidas bloqueadas por una regla de firewall", 8),
+        ("failed_scheduled_login", "Una tarea programada registra varios fallos de autenticación", 7),
+        ("unknown_device", "Dispositivo no identificado intentó acceder a la red interna", 8),
+        ("log_collection_delay", "Retraso sostenido en la recepción de registros de un servidor", 7),
+        ("disk_pressure", "Almacenamiento del servidor de registros supera el 85 por ciento", 7),
+        ("unusual_process", "Proceso no habitual ejecutado en una estación de trabajo", 8),
+        ("mail_quarantine", "Mensajes sospechosos retenidos en la cuarentena de correo", 8),
+    ]),
+    ("low_ops", "SRV-SOPORTE01", 443, 2, [
+        ("single_login_failure", "Un intento de inicio de sesión fallido en una cuenta de usuario", 4),
+        ("blocked_connection", "Una conexión saliente fue bloqueada por la política de firewall", 5),
+        ("agent_restart", "Agente de monitoreo reiniciado automáticamente después de una desconexión", 4),
+        ("cert_reminder", "Certificado de un servicio interno vence dentro de treinta días", 4),
+        ("backup_retry", "Respaldo completado después de un reintento automático", 5),
+        ("password_expiry", "Contraseña de una cuenta de servicio está próxima a vencer", 4),
+        ("disk_warning", "Uso de disco del servidor de monitoreo supera el 70 por ciento", 5),
+        ("quarantined_file", "Archivo sospechoso aislado por la protección del endpoint", 6),
+        ("denied_usb", "Dispositivo USB bloqueado por la política corporativa", 5),
+        ("patch_pending", "Actualización de seguridad pendiente en una estación de trabajo", 4),
+    ]),
+    ("info_ops", "SRV-MON01", 443, 2, [
+        ("backup_completed", "Respaldo diario completado correctamente", 2),
+        ("agent_connected", "Agente de monitoreo conectado y enviando registros", 1),
+        ("login_success", "Inicio de sesión correcto en un equipo administrativo", 2),
+        ("antivirus_updated", "Firmas del antivirus actualizadas correctamente", 2),
+        ("patch_installed", "Actualización de seguridad instalada correctamente", 2),
+        ("firewall_policy_loaded", "Política de firewall cargada correctamente", 1),
+        ("scheduled_scan", "Análisis programado del endpoint completado sin hallazgos", 2),
+        ("log_rotation", "Rotación programada de registros completada", 1),
+        ("service_restart", "Servicio de monitoreo reiniciado durante mantenimiento programado", 3),
+        ("access_review", "Revisión programada de accesos completada", 2),
+    ]),
+]
+
+
+def additional_scenarios():
+    scenarios = {}
+    for group, host, port, criticality, entries in GROUPS:
+        for name, description, level in entries:
+            key = f"{group}_{name}"
+            if key in scenarios:
+                raise ValueError(f"Escenario duplicado: {key}")
+            rule_id = str(200000 + len(scenarios))
+            scenarios[key] = (rule_id, level, description, host, port, criticality)
+    return scenarios

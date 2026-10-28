@@ -12,7 +12,6 @@ interface LiveEvent {
   alert_id?: string
   severity?: Severity
   description?: string
-  simulated?: boolean
 }
 
 export default function LiveNotifications() {
@@ -23,12 +22,15 @@ export default function LiveNotifications() {
   const [sound, setSound] = useState(false)
   const soundRef = useRef(false)
   const audioRef = useRef<AudioContext | null>(null)
+  const alarmRef = useRef<OscillatorNode | null>(null)
   const canRead = hasPermission('alerts:read')
 
   const toggleSound = async () => {
     if (soundRef.current) {
       soundRef.current = false
       setSound(false)
+      alarmRef.current?.stop()
+      alarmRef.current = null
       return
     }
     try {
@@ -42,7 +44,12 @@ export default function LiveNotifications() {
     }
   }
 
-  useEffect(() => () => { void audioRef.current?.close() }, [])
+  useEffect(() => () => {
+    alarmRef.current?.stop()
+    alarmRef.current = null
+    void audioRef.current?.close()
+    audioRef.current = null
+  }, [])
 
   useEffect(() => {
     if (!user || !canRead) return
@@ -75,17 +82,33 @@ export default function LiveNotifications() {
           refresh()
           if (event.type !== 'alert.created' || !event.alert_id || !event.severity) return
           const severity = SEVERITY_LABELS[event.severity] ?? event.severity
-          push(`${event.simulated ? 'Simulada · ' : ''}${severity}: ${event.description ?? 'Nueva alerta'}`, 'info', `/alerts/${event.alert_id}`)
+          push(`${severity}: ${event.description ?? 'Nueva alerta'}`, 'info', `/alerts/${event.alert_id}`)
           if (soundRef.current && ['high', 'critical'].includes(event.severity) && audioRef.current?.state === 'running') {
             const context = audioRef.current
+            alarmRef.current?.stop()
             const oscillator = context.createOscillator()
             const gain = context.createGain()
-            oscillator.frequency.value = 700
-            gain.gain.setValueAtTime(0.07, context.currentTime)
-            gain.gain.exponentialRampToValueAtTime(0.001, context.currentTime + 0.18)
+            const start = context.currentTime
+            oscillator.type = 'triangle'
+            gain.gain.setValueAtTime(0.001, start)
+            gain.gain.linearRampToValueAtTime(0.22, start + 0.05)
+            for (let pulse = 0; pulse < 10; pulse += 1) {
+              const at = start + pulse * 0.5
+              oscillator.frequency.setValueAtTime(650, at)
+              oscillator.frequency.linearRampToValueAtTime(1050, at + 0.25)
+              oscillator.frequency.linearRampToValueAtTime(650, at + 0.5)
+            }
+            gain.gain.setValueAtTime(0.22, start + 4.9)
+            gain.gain.linearRampToValueAtTime(0.001, start + 5)
             oscillator.connect(gain).connect(context.destination)
-            oscillator.start()
-            oscillator.stop(context.currentTime + 0.18)
+            alarmRef.current = oscillator
+            oscillator.onended = () => {
+              if (alarmRef.current === oscillator) alarmRef.current = null
+              oscillator.disconnect()
+              gain.disconnect()
+            }
+            oscillator.start(start)
+            oscillator.stop(start + 5)
           }
         }
         socket.onclose = () => {

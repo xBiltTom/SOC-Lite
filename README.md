@@ -195,15 +195,16 @@ make simulator-stop
 ```
 
 El simulador envía inmediatamente una alerta ficticia y después espera `SIMULATOR_INTERVAL_SECONDS`
-(30 segundos por defecto) entre envíos. Alterna los escenarios incluidos en `SIMULATOR_SCENARIOS`
-(`ssh,ransomware,benign` por defecto); si el webhook falla, lo informa en `docker compose logs simulator`
+(30 segundos por defecto) entre envíos. Recorre 130 escenarios en orden aleatorio y vuelve a
+mezclarlos cuando termina el catálogo. Incluye autenticación, ransomware, redes, DNS, bases de datos,
+correo y actividades benignas. Si el webhook falla, lo informa en `docker compose logs simulator`
 y continúa con el siguiente evento. La demora del triaje se suma al intervalo. Cambiar las variables
 en `.env` y volver a ejecutar `make simulator-start` recrea el contenedor con la nueva configuración.
 
 La consola recibe por WebSocket las alertas guardadas y el resultado del triaje. Una conexión perdida
 se restablece y la interfaz vuelve a cargar los datos; los avisos que hayan ocurrido durante la
 desconexión no se reproducen. El sonido está desactivado inicialmente: actívalo en la cabecera para
-escuchar las alertas altas y críticas. El generador produce datos ficticios y no realiza ataques.
+escuchar durante cinco segundos las alertas altas y críticas. El generador produce datos ficticios y no realiza ataques.
 
 El canal en vivo usa memoria local y requiere un único proceso de backend; para varias réplicas se
 necesitaría un sistema compartido de publicación de eventos. El workflow anterior no es necesario

@@ -19,7 +19,7 @@ def main() -> int:
         "id": args.id or f"demo-ssh-{uuid.uuid4().hex[:12]}",
         "timestamp": args.timestamp or datetime.now(timezone.utc).isoformat(),
         "source": "wazuh",
-        "rule": {"id": "5710", "level": 12, "description": "Fuerza bruta SSH simulada: múltiples intentos fallidos"},
+        "rule": {"id": "5710", "level": 12, "description": "Fuerza bruta SSH: múltiples intentos fallidos"},
         "agent": {"name": "SRV-DEMO-WEB01", "criticality": 5},
         "data": {"srcip": "203.0.113.44", "dstip": "10.0.4.21", "dstport": 22, "protocol": "tcp"},
         "demo": True,

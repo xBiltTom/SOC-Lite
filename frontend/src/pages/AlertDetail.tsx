@@ -131,7 +131,6 @@ export default function AlertDetailPage() {
         subtitle={`${alert.source} · regla ${alert.rule_id ?? '—'} · ${alert.agent_name ?? 'activo desconocido'} · ${formatDate(alert.received_at)}`}
         actions={
           <>
-            {alert.raw_payload.demo === true && <span className="chip border-accent/30 text-accent">Evento simulado</span>}
             <SeverityBadge severity={alert.severity} />
             <StatusBadge status={alert.status} />
             {hasPermission('triage:run') && (
