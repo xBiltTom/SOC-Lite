@@ -33,7 +33,8 @@ def _malicious_count(enrichment: list[dict[str, Any]]) -> int:
     return sum(
         1
         for item in enrichment
-        if str(item.get("verdict", "")).lower() in {"malicious", "suspicious"}
+        if item.get("status") in (None, "ok")
+        and str(item.get("verdict", "")).lower() in {"malicious", "suspicious"}
     )
 
 
@@ -48,23 +49,14 @@ def heuristic(
     malicious = _malicious_count(enrichment)
     score = (level / 14) * 50 + (alert.asset_criticality / 5) * 25 + min(malicious * 9, 25)
 
-    if memory_hint and memory_hint.get("false_positives", 0) >= 2:
-        score -= 25
-
-    if score >= 65:
-        verdict = "true_positive"
-    elif score >= 45:
+    # Los resultados automáticos previos no equivalen a feedback humano.
+    # La puntuación prioriza la revisión; no confirma actividad maliciosa.
+    if score >= 45:
         verdict = "suspicious"
-    elif score >= 25:
-        verdict = "inconclusive"
     else:
-        verdict = "benign"
+        verdict = "inconclusive"
 
     severity = alert.severity
-    if verdict == "true_positive" and severity in ("low", "medium"):
-        severity = "high"
-    if verdict == "benign" and severity in ("critical", "high"):
-        severity = "medium"
 
     actions: list[RecommendedAction] = []
     for tag in alert.tags:
@@ -88,7 +80,8 @@ def heuristic(
     )
 
     mitre = sorted({_MITRE[tag] for tag in alert.tags if tag in _MITRE})
-    confidence = round(min(0.9, 0.45 + score / 220), 3)
+    # Compatibilidad con el contrato: valor orientativo, no probabilidad calibrada.
+    confidence = 0.5
     return TriageOut(
         verdict=verdict,
         severity=severity,
@@ -100,16 +93,16 @@ def heuristic(
         ),
         reasoning=(
             "Puntaje = 50% nivel de regla + 25% criticidad del activo + 25% reputación de "
-            "indicadores, con penalización por falsos positivos recurrentes en la memoria local. "
-            "Resultado degradado: no sustituye la revisión de un analista."
+            "indicadores. El puntaje sirve para priorizar, no para confirmar un ataque. "
+            "La confianza es orientativa y no está calibrada. Se requiere revisión humana."
         ),
         recommended_actions=actions[:5],
         mitre_techniques=mitre,
         model="heuristic-engine",
-        prompt_version="heuristic-v1",
+        prompt_version="heuristic-v2",
         latency_ms=0,
         status="degraded",
-        needs_human=verdict in ("inconclusive", "suspicious"),
+        needs_human=True,
         fallback_used=True,
         enrichment=enrichment,
         raw_response={"score": round(score, 2), "malicious_indicators": malicious, "reason": reason},

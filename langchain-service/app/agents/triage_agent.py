@@ -2,10 +2,9 @@
 
 Flujo:
   1. Enriquecimiento con herramientas (VirusTotal, AbuseIPDB, GeoIP, MITRE).
-  2. Memoria local de casos (falsos positivos recurrentes por indicador).
+  2. Memoria local de resultados automáticos previos (no validados por humanos).
   3. LLM con *tool calling* y prompt endurecido contra inyección de instrucciones.
-  4. Validación Pydantic de la salida; si falla, reintento de reparación y, en
-     último término, motor heurístico marcado como `degraded`.
+  4. Validación Pydantic de la salida; si falla, motor heurístico `degraded`.
 """
 from __future__ import annotations
 
@@ -45,6 +44,17 @@ class LLMDecision(BaseModel):
     recommended_actions: list[RecommendedAction] = Field(default_factory=list, max_length=8)
     mitre_techniques: list[str] = Field(default_factory=list)
     needs_human: bool = False
+
+    @field_validator("recommended_actions", mode="before")
+    @classmethod
+    def normalize_action_priorities(cls, values: Any) -> Any:
+        # Algunos modelos numeran cinco acciones de 1 a 5; el contrato usa P1-P4.
+        if not isinstance(values, list):
+            return values
+        return [
+            {**item, "priority": 4} if isinstance(item, dict) and item.get("priority") == 5 else item
+            for item in values
+        ]
 
     @field_validator("verdict")
     @classmethod
@@ -272,7 +282,7 @@ class TriageAgent:
             prompt_version=prompts.PROMPT_VERSION,
             latency_ms=latency_ms,
             status="completed",
-            needs_human=decision.needs_human or decision.verdict == "inconclusive",
+            needs_human=True,
             fallback_used=False,
             enrichment=enrichment,
             raw_response={"content": str(response.content)[:4000]},

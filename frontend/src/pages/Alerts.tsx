@@ -210,9 +210,6 @@ export default function AlertsPage() {
                         {alert.verdict ? (
                           <div className="space-y-1">
                             <VerdictBadge verdict={alert.verdict} />
-                            <p className="text-[10px] text-slate-600">
-                              confianza {alert.confidence ? Math.round(alert.confidence * 100) : '—'}%
-                            </p>
                           </div>
                         ) : (
                           <span className="text-xs text-slate-600">sin triaje</span>

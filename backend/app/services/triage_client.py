@@ -83,29 +83,18 @@ def _heuristic(alert: Alert, enrichments: list[dict[str, Any]] | None = None) ->
     malicious = sum(
         1
         for item in enrichments or []
-        if str(item.get("verdict", "")).lower() in {"malicious", "suspicious"}
+        if item.get("status") in (None, "ok")
+        and str(item.get("verdict", "")).lower() in {"malicious", "suspicious"}
     )
     score = (level / 14) * 55 + (criticality / 5) * 25 + min(malicious * 8, 20)
 
-    if score >= 70:
-        verdict = TriageVerdict.TRUE_POSITIVE
-    elif score >= 50:
+    if score >= 50:
         verdict = TriageVerdict.SUSPICIOUS
-    elif score >= 30:
-        verdict = TriageVerdict.INCONCLUSIVE
     else:
-        verdict = TriageVerdict.BENIGN
-
-    if verdict == TriageVerdict.TRUE_POSITIVE and alert.severity in (Severity.LOW, Severity.INFO):
-        verdict = TriageVerdict.SUSPICIOUS
+        verdict = TriageVerdict.INCONCLUSIVE
 
     severity = alert.severity
-    if verdict == TriageVerdict.TRUE_POSITIVE and alert.severity in (Severity.LOW, Severity.MEDIUM):
-        severity = Severity.HIGH
-    if verdict == TriageVerdict.BENIGN and alert.severity in (Severity.CRITICAL, Severity.HIGH):
-        severity = Severity.MEDIUM
-
-    confidence = round(min(0.92, 0.5 + score / 250), 3)
+    confidence = 0.5  # Indicador orientativo, no probabilidad calibrada.
     tags = alert.tags or []
     actions: list[dict[str, Any]] = []
     for tag, action in _ACTION_BY_TAG.items():
@@ -144,15 +133,15 @@ def _heuristic(alert: Alert, enrichments: list[dict[str, Any]] | None = None) ->
         summary=summary,
         reasoning=(
             "Puntaje compuesto = 55% nivel de regla + 25% criticidad del activo + "
-            "20% reputación de indicadores. Se aplica degradación a 'suspicious' "
-            "cuando el veredicto positivo no es coherente con la severidad de entrada."
+            "20% reputación de indicadores. El puntaje prioriza la revisión y no confirma "
+            "un ataque; la confianza es orientativa y no está calibrada."
         ),
         recommended_actions=actions,
         mitre_techniques=mitre,
         model="heuristic-engine",
-        prompt_version="heuristic-v1",
+        prompt_version="heuristic-v2",
         status=TriageStatus.DEGRADED,
-        needs_human=verdict in (TriageVerdict.INCONCLUSIVE, TriageVerdict.SUSPICIOUS),
+        needs_human=True,
         fallback_used=True,
         raw_response={"score": round(score, 2), "malicious_indicators": malicious},
     )

@@ -311,9 +311,8 @@ async def run_triage(
         )
         known.add(key)
 
-    if output.verdict == TriageVerdict.FALSE_POSITIVE:
-        alert.status = AlertStatus.FALSE_POSITIVE
-    elif output.verdict == TriageVerdict.TRUE_POSITIVE and output.severity.weight >= Severity.HIGH.weight:
+    # Un falso positivo propuesto requiere validación explícita del analista.
+    if output.verdict == TriageVerdict.TRUE_POSITIVE and output.severity.weight >= Severity.HIGH.weight:
         alert.status = AlertStatus.ESCALATED
     else:
         alert.status = AlertStatus.TRIAGED

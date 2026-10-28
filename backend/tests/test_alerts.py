@@ -5,6 +5,17 @@ import uuid
 import pytest
 
 from tests.conftest import unique_alert_payload
+from app.models.enums import Severity, TriageStatus, TriageVerdict
+from app.models.alert import Alert
+from app.services import triage_client
+
+
+def test_respaldo_del_backend_no_confirma_por_puntaje():
+    alert = Alert(rule_level=14, asset_criticality=5, severity=Severity.CRITICAL, tags=["ransomware"])
+    result = triage_client._heuristic(alert)
+    assert result.verdict == TriageVerdict.SUSPICIOUS
+    assert result.severity == Severity.CRITICAL
+    assert result.needs_human and result.fallback_used
 
 
 @pytest.mark.asyncio
@@ -71,6 +82,29 @@ async def test_triaje_con_fallback_heuristica(client, ingest_headers, admin_toke
     assert 0 <= triage["confidence"] <= 1
     assert triage["summary"]
     assert triage["recommended_actions"]
+
+
+@pytest.mark.asyncio
+async def test_falso_positivo_del_modelo_requiere_validacion_humana(client, ingest_headers, admin_token, auth, monkeypatch):
+    async def fake_triage(alert, enrichment):
+        return triage_client.TriageOutput(
+            verdict=TriageVerdict.FALSE_POSITIVE, severity=Severity.MEDIUM,
+            confidence=0.6, summary="Posible falso positivo; verificar con el analista",
+            status=TriageStatus.COMPLETED, needs_human=True,
+        )
+
+    monkeypatch.setattr(triage_client, "run_triage", fake_triage)
+    created = await client.post("/api/v1/alerts/ingest", json=unique_alert_payload(), headers=ingest_headers)
+    alert_id = created.json()["alert_id"]
+    response = await client.post(f"/api/v1/alerts/{alert_id}/triage", headers=auth(admin_token))
+    assert response.status_code == 200
+    assert response.json()["verdict"] == "false_positive"
+    detail = await client.get(f"/api/v1/alerts/{alert_id}", headers=auth(admin_token))
+    assert detail.json()["status"] == "triaged"
+    feedback = await client.post(f"/api/v1/alerts/{alert_id}/feedback", json={"is_false_positive": True}, headers=auth(admin_token))
+    assert feedback.status_code == 200
+    detail = await client.get(f"/api/v1/alerts/{alert_id}", headers=auth(admin_token))
+    assert detail.json()["status"] == "false_positive"
 
 
 @pytest.mark.asyncio

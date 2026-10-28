@@ -14,7 +14,7 @@ class Settings(BaseSettings):
     environment: str = "development"
 
     llm_base_url: str = "https://api.groq.com/openai/v1"
-    llm_model: str = "llama-3.3-70b-versatile"
+    llm_model: str = "openai/gpt-oss-20b"
     llm_api_key: str = ""
     llm_enabled: bool = True
     llm_temperature: float = 0.0

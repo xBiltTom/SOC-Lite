@@ -64,7 +64,7 @@ En `.env` configura `LLM_ENABLED=true`, `LLM_API_KEY`, `LLM_BASE_URL` y `LLM_MOD
 
 ```env
 LLM_BASE_URL=https://api.groq.com/openai/v1
-LLM_MODEL=llama-3.3-70b-versatile
+LLM_MODEL=openai/gpt-oss-20b
 LLM_API_KEY=tu_clave
 LLM_ENABLED=true
 LLM_TIMEOUT_SECONDS=30
@@ -76,6 +76,17 @@ la clave de Gemini y un modelo Gemini disponible para tu cuenta. Consulta la doc
 [Groq](https://console.groq.com/docs/openai) y [Gemini](https://ai.google.dev/gemini-api/docs/openai/).
 El texto y los datos de la alerta se envían al proveedor configurado: utiliza datos ficticios en la demo.
 El timeout del backend debe ser mayor que el del LLM para permitir el enriquecimiento y el respaldo.
+
+El resultado del modelo requiere revisión humana y su confianza es una estimación no calibrada. Sin
+LLM, el respaldo usa la puntuación solo para priorizar: responde `suspicious` o `inconclusive`, sin
+confirmar ataques ni descartar alertas automáticamente. Una propuesta de falso positivo queda triada
+hasta que el analista la valide. Los resultados automáticos previos no equivalen a feedback humano.
+
+Para comprobar los cinco casos de la heurística con Docker:
+
+```bash
+docker compose run --rm --no-deps -v "$PWD/langchain-service/tests:/app/tests:ro" triage python -m unittest discover -s tests -v
+```
 
 ### Puertos de esta instalación
 

@@ -156,7 +156,14 @@ export default function AlertDetailPage() {
                   </span>
                 )}
               </div>
-              {latest && <Confidence value={latest.confidence} />}
+              {latest && (latest.fallback_used ? (
+                <span className="text-xs text-slate-400">Sin confianza calibrada</span>
+              ) : (
+                <div title="Estimación del modelo; no representa precisión medida">
+                  <span className="text-[10px] text-slate-500">Confianza orientativa</span>
+                  <Confidence value={latest.confidence} />
+                </div>
+              ))}
             </div>
 
             {latest ? (
