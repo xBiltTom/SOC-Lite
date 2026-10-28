@@ -179,7 +179,8 @@ async def run_triage(
                 raw_response=response.json(),
             )
     except (httpx.HTTPError, ValidationError, ValueError) as exc:
-        logger.warning("triaje remoto no disponible (%s); se usa heurística local", exc)
         if not settings.triage_fail_open:
+            logger.warning("triaje remoto no disponible (%s); respaldo deshabilitado", exc)
             raise AppError("Servicio de triaje no disponible", 503, "TRIAGE_UNAVAILABLE") from exc
+        logger.warning("triaje remoto no disponible (%s); se usa heurística local", exc)
         return _heuristic(alert, enrichments)

@@ -56,6 +56,7 @@ SEVERITY_ES = {
 STATUS_ES = {
     "pending": "Pendiente",
     "triaging": "En triaje",
+    "triage_failed": "Error de triaje",
     "triaged": "Triada",
     "in_review": "En revisión",
     "escalated": "Escalada",

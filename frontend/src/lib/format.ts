@@ -31,6 +31,7 @@ export const SEVERITY_HEX: Record<Severity, string> = {
 export const STATUS_LABELS: Record<AlertStatus, string> = {
   pending: 'Pendiente',
   triaging: 'En triaje',
+  triage_failed: 'Error de triaje',
   triaged: 'Triada',
   in_review: 'En revisión',
   escalated: 'Escalada',
@@ -42,6 +43,7 @@ export const STATUS_LABELS: Record<AlertStatus, string> = {
 export const STATUS_STYLES: Record<AlertStatus, string> = {
   pending: 'border-slate-500/40 bg-slate-500/10 text-slate-300',
   triaging: 'border-cyan-500/40 bg-cyan-500/10 text-cyan-300',
+  triage_failed: 'border-rose-500/40 bg-rose-500/10 text-rose-300',
   triaged: 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300',
   in_review: 'border-indigo-500/40 bg-indigo-500/10 text-indigo-300',
   escalated: 'border-rose-500/40 bg-rose-500/10 text-rose-300',

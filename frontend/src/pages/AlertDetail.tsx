@@ -72,7 +72,10 @@ export default function AlertDetailPage() {
       push(`Triaje completado: ${VERDICT_LABELS[result.verdict]}`, 'success')
       invalidate()
     },
-    onError: (error) => push(apiErrorMessage(error), 'error'),
+    onError: (error) => {
+      push(apiErrorMessage(error), 'error')
+      invalidate()
+    },
   })
 
   const feedback = useMutation({
@@ -119,6 +122,7 @@ export default function AlertDetailPage() {
   const alert = query.data
   const latest = alert.triage_results[0]
   const busy = triage.isPending || feedback.isPending || incident.isPending || update.isPending
+  const triageBlocked = alert.status === 'triaging' || alert.status === 'triage_failed'
 
   return (
     <div className="animate-fade-up">
@@ -134,14 +138,21 @@ export default function AlertDetailPage() {
             <SeverityBadge severity={alert.severity} />
             <StatusBadge status={alert.status} />
             {hasPermission('triage:run') && (
-              <button className="btn-primary" onClick={() => triage.mutate()} disabled={busy}>
+              <button className="btn-primary" onClick={() => triage.mutate()} disabled={busy || alert.status === 'triaging'}>
                 {triage.isPending ? <Loader2 size={15} className="animate-spin" /> : <Play size={15} />}
-                {latest ? 'Re-ejecutar triaje' : 'Ejecutar triaje'}
+                {alert.status === 'triage_failed' ? 'Reintentar triaje' : latest ? 'Re-ejecutar triaje' : 'Ejecutar triaje'}
               </button>
             )}
           </>
         }
       />
+
+      {alert.status === 'triage_failed' && (
+        <div className="mb-5 border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-200" role="alert">
+          No se pudo completar el último triaje. La alerta está guardada; puedes reintentarlo.
+          {latest && ' El resultado mostrado corresponde a un intento anterior.'}
+        </div>
+      )}
 
       <div className="grid grid-cols-1 gap-5 xl:grid-cols-[1.65fr_1fr]">
         <div className="space-y-5">
@@ -328,7 +339,7 @@ export default function AlertDetailPage() {
                       setFeedbackFp(false)
                       setFeedbackOpen(true)
                     }}
-                    disabled={busy}
+                    disabled={busy || triageBlocked}
                   >
                     <ThumbsUp size={15} className="text-emerald-400" /> Confirmar verdadero positivo
                   </button>
@@ -338,7 +349,7 @@ export default function AlertDetailPage() {
                       setFeedbackFp(true)
                       setFeedbackOpen(true)
                     }}
-                    disabled={busy}
+                    disabled={busy || triageBlocked}
                   >
                     <ThumbsDown size={15} className="text-amber-400" /> Marcar falso positivo
                   </button>
@@ -349,7 +360,7 @@ export default function AlertDetailPage() {
                 <button
                   className="btn-secondary w-full justify-start"
                   onClick={() => incident.mutate()}
-                  disabled={busy}
+                  disabled={busy || triageBlocked}
                 >
                   {incident.isPending ? <Loader2 size={15} className="animate-spin" /> : <Siren size={15} className="text-rose-400" />}
                   Crear incidente y ticket
@@ -363,10 +374,11 @@ export default function AlertDetailPage() {
                     className="input"
                     value={alert.status}
                     onChange={(event) => update.mutate(event.target.value)}
-                    disabled={busy}
+                    disabled={busy || alert.status === 'triaging' || alert.status === 'triage_failed'}
                   >
+                    {alert.status === 'triage_failed' && <option value="triage_failed" disabled>Error de triaje</option>}
                     {STATUSES.map((status) => (
-                      <option key={status} value={status}>
+                      <option key={status} value={status} disabled={status === 'triaging'}>
                         {STATUS_LABELS[status]}
                       </option>
                     ))}

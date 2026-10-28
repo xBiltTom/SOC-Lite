@@ -66,7 +66,7 @@ async def summary(db: AsyncSession, days: int) -> dict[str, Any]:
             COUNT(*) FILTER (WHERE severity = 'low') AS low,
             COUNT(*) FILTER (WHERE severity = 'info') AS info,
             COUNT(*) FILTER (WHERE triaged_at IS NOT NULL) AS triaged,
-            COUNT(*) FILTER (WHERE status IN ('pending','triaging')) AS pending,
+            COUNT(*) FILTER (WHERE status IN ('pending','triaging','triage_failed')) AS pending,
             COUNT(*) FILTER (WHERE verdict = 'false_positive') AS false_positive,
             COUNT(*) FILTER (WHERE needs_human) AS human_review,
             COALESCE(AVG(EXTRACT(EPOCH FROM (triaged_at - received_at)) / 60.0), 0) AS avg_minutes,

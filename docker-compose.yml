@@ -29,6 +29,7 @@ services:
       INGEST_API_KEY: ${INGEST_API_KEY:-dev-ingest-key-change-me}
       TRIAGE_SERVICE_URL: http://triage:8001
       TRIAGE_TIMEOUT_SECONDS: ${TRIAGE_TIMEOUT_SECONDS:-75}
+      TRIAGE_FAIL_OPEN: ${TRIAGE_FAIL_OPEN:-true}
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:8090}
       ENVIRONMENT: ${ENVIRONMENT:-production}
       REPORTS_DIR: storage/reports

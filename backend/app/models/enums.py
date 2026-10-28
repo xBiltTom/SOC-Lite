@@ -37,6 +37,7 @@ class Severity(StrEnum):
 class AlertStatus(StrEnum):
     PENDING = "pending"
     TRIAGING = "triaging"
+    TRIAGE_FAILED = "triage_failed"
     TRIAGED = "triaged"
     IN_REVIEW = "in_review"
     ESCALATED = "escalated"

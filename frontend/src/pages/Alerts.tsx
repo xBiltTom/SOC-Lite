@@ -21,6 +21,7 @@ import type { AlertStatus } from '../types'
 const STATUSES: AlertStatus[] = [
   'pending',
   'triaging',
+  'triage_failed',
   'triaged',
   'escalated',
   'in_review',

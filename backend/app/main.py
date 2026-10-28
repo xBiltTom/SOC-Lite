@@ -13,6 +13,7 @@ from app.core.config import settings
 from app.core.errors import register_exception_handlers
 from app.core.logging import configure_logging
 from app.db.session import engine
+from app.services.triage_recovery import initialize_recovery
 from app.middleware.audit_middleware import (
     AuditAccessMiddleware,
     RequestContextMiddleware,
@@ -27,6 +28,7 @@ logger = logging.getLogger("soc-lite")
 async def lifespan(app: FastAPI):
     if settings.is_production and settings.secret_key.startswith("dev-"):
         raise RuntimeError("SECRET_KEY de desarrollo detectada en producción")
+    await initialize_recovery()
     logger.info("SOC-Lite API iniciada", extra={"environment": settings.environment})
     yield
     await engine.dispose()

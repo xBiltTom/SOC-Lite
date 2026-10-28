@@ -5,6 +5,7 @@ from starlette.websockets import WebSocketDisconnect
 
 from app.main import app
 from app.core.config import settings
+from app.services import triage_client
 from tests.conftest import ADMIN, unique_alert_payload
 
 
@@ -31,4 +32,24 @@ def test_live_requires_token_and_emits_after_ingest():
             assert event["simulated"] is True
             triage = client.post(f"/api/v1/alerts/{event['alert_id']}/triage/automation", headers={"X-Ingest-Key": settings.ingest_api_key})
             assert triage.status_code == 200
+            assert ws.receive_json() == {"type": "alert.triaging", "alert_id": event["alert_id"]}
             assert ws.receive_json() == {"type": "alert.triaged", "alert_id": event["alert_id"]}
+
+
+def test_live_reports_triage_failure(monkeypatch):
+    async def fail(alert, enrichment):
+        raise RuntimeError("fallo de prueba")
+
+    monkeypatch.setattr(triage_client, "run_triage", fail)
+    with TestClient(app) as client:
+        login = client.post("/api/v1/auth/login", json={"username": ADMIN[0], "password": ADMIN[1]})
+        with client.websocket_connect("/api/v1/live") as ws:
+            ws.send_json({"token": login.json()["access_token"]})
+            assert ws.receive_json()["type"] == "connected"
+            result = client.post("/api/v1/alerts/ingest", json=unique_alert_payload(), headers={"X-Ingest-Key": settings.ingest_api_key})
+            alert_id = result.json()["alert_id"]
+            assert ws.receive_json()["type"] == "alert.created"
+            response = client.post(f"/api/v1/alerts/{alert_id}/triage/automation", headers={"X-Ingest-Key": settings.ingest_api_key})
+            assert response.status_code == 503
+            assert ws.receive_json() == {"type": "alert.triaging", "alert_id": alert_id}
+            assert ws.receive_json() == {"type": "alert.triage_failed", "alert_id": alert_id}

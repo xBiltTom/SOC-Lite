@@ -39,7 +39,7 @@ DROP TYPE IF EXISTS integration_type, report_status, report_format, report_type,
 -- 1. TIPOS ENUMERADOS
 -- =====================================================================
 CREATE TYPE severity_level AS ENUM ('critical','high','medium','low','info');
-CREATE TYPE alert_status AS ENUM ('pending','triaging','triaged','in_review','escalated','closed','false_positive','discarded');
+CREATE TYPE alert_status AS ENUM ('pending','triaging','triage_failed','triaged','in_review','escalated','closed','false_positive','discarded');
 CREATE TYPE triage_verdict AS ENUM ('true_positive','false_positive','suspicious','benign','inconclusive');
 CREATE TYPE triage_status AS ENUM ('pending','completed','degraded','failed');
 CREATE TYPE incident_status AS ENUM ('open','investigating','contained','resolved','closed');

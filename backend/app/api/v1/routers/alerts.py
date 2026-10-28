@@ -1,6 +1,7 @@
 """API de alertas: ingesta desde SIEM, consulta, triaje, feedback e incidentes."""
 from __future__ import annotations
 
+import asyncio
 import secrets
 import uuid
 from datetime import datetime, timedelta, timezone
@@ -246,14 +247,51 @@ async def run_triage(
     actor: RunTriage,
     force: bool = Query(default=False),
 ) -> TriageOut:
+    # La fila bloqueada evita que dos solicitudes inicien el mismo intento a la vez.
+    locked = (await db.execute(select(Alert.id).where(Alert.id == alert_id).with_for_update())).scalar_one_or_none()
+    if locked is None:
+        raise NotFound("Alerta")
     alert = await _get_alert(db, alert_id)
+    if alert.status == AlertStatus.TRIAGING:
+        raise Conflict("El triaje de esta alerta ya está en curso")
     latest = alert.triage_results[0] if alert.triage_results else None
-    if latest and not force and latest.triaged_at > datetime.now(timezone.utc) - timedelta(seconds=60):
+    if (alert.status != AlertStatus.TRIAGE_FAILED and latest and not force
+            and latest.triaged_at > datetime.now(timezone.utc) - timedelta(seconds=60)):
         return TriageOut.model_validate(latest)
 
+    is_retry = alert.status == AlertStatus.TRIAGE_FAILED
     alert.status = AlertStatus.TRIAGING
+    if is_retry:
+        await audit.record(
+            db, module="triage", action="TRIAGE_RETRY", user=actor,
+            username="n8n" if actor is None else None, request=request,
+            entity_type="alert", entity_id=alert.id,
+        )
     await db.commit()
+    await live_events.publish({"type": "alert.triaging", "alert_id": str(alert.id)})
 
+    actor_id = actor.id if actor is not None else None
+    actor_username = actor.username if actor is not None else "n8n"
+    try:
+        return await _complete_triage(alert, request, db, actor)
+    except (Exception, asyncio.CancelledError) as exc:
+        await db.rollback()
+        failed = await _get_alert(db, alert_id)
+        failed.status = AlertStatus.TRIAGE_FAILED
+        await audit.record(
+            db, module="triage", action="TRIAGE_FAILED", user_id=actor_id,
+            username=actor_username, request=request,
+            entity_type="alert", entity_id=alert_id, result=AuditResult.FAILURE,
+            detail={"reason": "No se pudo completar el triaje. Puede reintentarlo."},
+        )
+        await db.commit()
+        await live_events.publish({"type": "alert.triage_failed", "alert_id": str(alert_id)})
+        if isinstance(exc, asyncio.CancelledError):
+            raise
+        raise AppError("No se pudo completar el triaje. Puede reintentarlo.", 503, "TRIAGE_FAILED") from exc
+
+
+async def _complete_triage(alert: Alert, request: Request, db: DbSession, actor: Any) -> TriageOut:
     enrichment = [
         {
             "provider": item.provider,
@@ -267,6 +305,8 @@ async def run_triage(
         for item in alert.enrichments
     ]
     output = await triage_client.run_triage(alert, enrichment)
+    if output.status == TriageStatus.FAILED:
+        raise AppError("El servicio de triaje no pudo analizar la alerta", 503, "TRIAGE_UNAVAILABLE")
 
     result = TriageResult(
         alert_id=alert.id,
@@ -361,6 +401,8 @@ async def feedback(
     actor: Annotated[Any, Depends(require_permission(P.TRIAGE_FEEDBACK))],
 ) -> FeedbackOut:
     alert = await _get_alert(db, alert_id)
+    if alert.status in (AlertStatus.TRIAGING, AlertStatus.TRIAGE_FAILED):
+        raise Conflict("Espere o reintente el triaje antes de validar la alerta")
     existing = (
         await db.execute(
             select(AlertFeedback).where(
@@ -412,6 +454,8 @@ async def create_incident(
     actor: Annotated[Any, Depends(require_permission(P.INCIDENTS_CREATE))],
 ) -> IncidentOut:
     alert = await _get_alert(db, alert_id)
+    if alert.status in (AlertStatus.TRIAGING, AlertStatus.TRIAGE_FAILED):
+        raise Conflict("Espere o reintente el triaje antes de crear el incidente")
     if alert.incident is not None:
         raise Conflict("La alerta ya tiene un incidente asociado")
 
@@ -457,6 +501,12 @@ async def update_alert(
     alert = await _get_alert(db, alert_id)
     changes: dict[str, Any] = {}
     if payload.status is not None:
+        if alert.status == AlertStatus.TRIAGING:
+            raise Conflict("No se puede cambiar el estado mientras el triaje está en curso")
+        if alert.status == AlertStatus.TRIAGE_FAILED:
+            raise Conflict("Reintente el triaje antes de cambiar el estado de la alerta")
+        if payload.status in (AlertStatus.TRIAGING, AlertStatus.TRIAGE_FAILED):
+            raise AppError("Los estados de triaje se gestionan automáticamente", 400, "INVALID_ALERT_STATUS")
         changes["status"] = {"from": alert.status.value, "to": payload.status.value}
         alert.status = payload.status
     if payload.tags is not None:

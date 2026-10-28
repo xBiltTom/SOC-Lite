@@ -221,6 +221,19 @@ El canal en vivo usa memoria local y requiere un único proceso de backend; para
 necesitaría un sistema compartido de publicación de eventos. El workflow anterior no es necesario
 para esta simulación.
 
+### Recuperar un triaje
+
+Si el triaje y su respaldo no pueden completarse, la alerta queda guardada con estado **Error de
+triaje**. En su detalle, un usuario con permiso de triaje puede pulsar **Reintentar triaje**; los
+fallos y reintentos quedan en la auditoría. La alerta no se duplica. Cuando el proveedor falla pero
+el respaldo heurístico responde, el resultado se muestra como **modo degradado**, no como error.
+
+Si la API se reinicia durante un intento, marca los triajes interrumpidos como fallidos al arrancar.
+El backend usa un único proceso para esta recuperación. El primer arranque aplica una migración
+aditiva del estado `triage_failed` en PostgreSQL; el usuario de la base debe poder modificar el tipo
+`alert_status`. No se borra información. Una alerta que n8n guardó pero aún no envió a triaje puede
+permanecer pendiente y se puede procesar desde su detalle.
+
 ```bash
 # 1. Autenticarse
 TOKEN=$(curl -s -X POST http://localhost:8010/api/v1/auth/login \

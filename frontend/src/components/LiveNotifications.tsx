@@ -78,8 +78,11 @@ export default function LiveNotifications() {
             refresh()
             return
           }
-          if (event.type !== 'alert.created' && event.type !== 'alert.triaged') return
+          if (!['alert.created', 'alert.triaging', 'alert.triaged', 'alert.triage_failed'].includes(event.type)) return
           refresh()
+          if (event.type === 'alert.triage_failed' && event.alert_id) {
+            push('No se pudo completar el triaje. Puedes reintentarlo.', 'error', `/alerts/${event.alert_id}`)
+          }
           if (event.type !== 'alert.created' || !event.alert_id || !event.severity) return
           const severity = SEVERITY_LABELS[event.severity] ?? event.severity
           push(`${severity}: ${event.description ?? 'Nueva alerta'}`, 'info', `/alerts/${event.alert_id}`)

@@ -2,6 +2,7 @@ export type Severity = 'critical' | 'high' | 'medium' | 'low' | 'info'
 export type AlertStatus =
   | 'pending'
   | 'triaging'
+  | 'triage_failed'
   | 'triaged'
   | 'in_review'
   | 'escalated'
