@@ -1,0 +1,109 @@
+name: soc-lite
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: soclite-db
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-soclite}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-soclite}
+      POSTGRES_DB: ${POSTGRES_DB:-soclite}
+    ports:
+      - "127.0.0.1:5439:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./db/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+      - ./db/seed.sql:/docker-entrypoint-initdb.d/02-seed.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-soclite} -d ${POSTGRES_DB:-soclite}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  backend:
+    build: ./backend
+    container_name: soclite-api
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-soclite}:${POSTGRES_PASSWORD:-soclite}@db:5432/${POSTGRES_DB:-soclite}
+      SECRET_KEY: ${SECRET_KEY:?Defina SECRET_KEY en .env}
+      INGEST_API_KEY: ${INGEST_API_KEY:-dev-ingest-key-change-me}
+      TRIAGE_SERVICE_URL: http://triage:8001
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:8090}
+      ENVIRONMENT: ${ENVIRONMENT:-production}
+      REPORTS_DIR: storage/reports
+      SLA_CRITICAL_MINUTES: ${SLA_CRITICAL_MINUTES:-15}
+      SLA_HIGH_MINUTES: ${SLA_HIGH_MINUTES:-30}
+      SLA_MEDIUM_MINUTES: ${SLA_MEDIUM_MINUTES:-240}
+      SLA_LOW_MINUTES: ${SLA_LOW_MINUTES:-1440}
+    ports:
+      - "127.0.0.1:8010:8000"
+    volumes:
+      - reports:/app/storage/reports
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  triage:
+    build: ./langchain-service
+    container_name: soclite-triage
+    environment:
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://ollama:11434}
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-llama3.1:8b}
+      LLM_ENABLED: ${LLM_ENABLED:-true}
+      VIRUSTOTAL_API_KEY: ${VIRUSTOTAL_API_KEY:-}
+      ABUSEIPDB_API_KEY: ${ABUSEIPDB_API_KEY:-}
+      GEOIP_ENABLED: ${GEOIP_ENABLED:-true}
+    ports:
+      - "127.0.0.1:8011:8001"
+
+  frontend:
+    build: ./frontend
+    container_name: soclite-web
+    ports:
+      - "127.0.0.1:8090:80"
+    depends_on:
+      - backend
+
+  n8n:
+    image: n8nio/n8n:latest
+    container_name: soclite-n8n
+    environment:
+      N8N_HOST: ${N8N_HOST:-localhost}
+      N8N_PORT: 5678
+      N8N_PROTOCOL: http
+      N8N_SECURE_COOKIE: "false"
+      N8N_DIAGNOSTICS_ENABLED: "false"
+      GENERIC_TIMEZONE: ${GENERIC_TIMEZONE:-America/Lima}
+      SOCLITE_API_URL: http://backend:8000
+      SOCLITE_INGEST_KEY: ${INGEST_API_KEY:-dev-ingest-key-change-me}
+      LANGCHAIN_URL: http://triage:8001
+      SLACK_WEBHOOK_URL: ${SLACK_WEBHOOK_URL:-}
+      OSTICKET_URL: ${OSTICKET_URL:-}
+      OSTICKET_TOKEN: ${OSTICKET_TOKEN:-}
+    ports:
+      - "127.0.0.1:5679:5678"
+    volumes:
+      - n8n_data:/home/node/.n8n
+      - ./n8n:/workflows:ro
+    depends_on:
+      - backend
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: soclite-ollama
+    profiles: ["llm"]
+    ports:
+      - "127.0.0.1:11435:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+
+volumes:
+  pgdata:
+  reports:
+  n8n_data:
+  ollama_data:
