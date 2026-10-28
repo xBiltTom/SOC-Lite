@@ -71,4 +71,4 @@ class HealthOut(BaseModel):
     service: str
     version: str
     llm_enabled: bool
-    ollama: str
+    llm: str

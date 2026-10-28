@@ -1,5 +1,8 @@
 # 7. Stack tecnológico detallado
 
+> Nota: este documento conserva la selección tecnológica inicial. La configuración actual usa un
+> proveedor LLM compatible con OpenAI en lugar de Ollama; consulta el README para el arranque vigente.
+
 > Criterio: **mínimo coste operativo, máxima trazabilidad y soberanía del dato**. Todo el software
 > es open source y desplegable on-premise; no hay dependencia obligatoria de la nube.
 

@@ -1,11 +1,10 @@
-"""Microservicio de triaje SOC-Lite (FastAPI + LangChain + Ollama)."""
+"""Microservicio de triaje SOC-Lite (FastAPI + LangChain)."""
 from __future__ import annotations
 
 import logging
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 
-import httpx
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -23,7 +22,7 @@ logger = logging.getLogger("soc-lite.triage")
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("Triage service iniciado (modelo=%s, llm_enabled=%s)",
-                settings.ollama_model, settings.llm_enabled)
+                settings.llm_model, settings.llm_enabled)
     yield
     logger.info("Triage service detenido")
 
@@ -33,7 +32,7 @@ app = FastAPI(
     version=settings.version,
     description=(
         "Enriquecimiento y clasificación de alertas SOC con LangChain. "
-        "Degrada a un motor heurístico local si Ollama no está disponible."
+        "Degrada a un motor heurístico local si el proveedor LLM no está disponible."
     ),
     lifespan=lifespan,
 )
@@ -48,19 +47,13 @@ app.add_middleware(
 
 @app.get("/health", response_model=HealthOut, tags=["Salud"])
 async def health() -> HealthOut:
-    ollama = "unavailable"
-    try:
-        async with httpx.AsyncClient(timeout=2.0) as client:
-            response = await client.get(f"{settings.ollama_base_url.rstrip('/')}/api/tags")
-        ollama = "ok" if response.status_code == 200 else f"http_{response.status_code}"
-    except httpx.HTTPError:
-        ollama = "unavailable"
+    llm = "disabled" if not settings.llm_enabled else ("configured" if settings.llm_api_key.strip() else "missing_key")
     return HealthOut(
-        status="ok" if ollama == "ok" or not settings.llm_enabled else "degraded",
+        status="degraded" if llm == "missing_key" else "ok",
         service=settings.service_name,
         version=settings.version,
         llm_enabled=settings.llm_enabled,
-        ollama=ollama,
+        llm=llm,
     )
 
 

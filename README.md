@@ -2,7 +2,7 @@
 
 **Triaje automático de alertas SOC para PYME, mediana empresa y organismo público.**
 Caso de uso 1 (crítico): reducir la fatiga de alertas combinando orquestación low-code
-(n8n), enriquecimiento de threat intelligence y razonamiento LLM local (LangChain + Ollama),
+(n8n), enriquecimiento de threat intelligence y razonamiento LLM mediante API compatible con OpenAI,
 con una consola web operativa, RBAC y bitácora inmutable.
 
 ![Panel de control](docs/screenshots/02-dashboard.png)
@@ -19,15 +19,11 @@ MTTT se mide en horas.
 ## La solución
 
 ```
-Wazuh / OPNsense ──webhook──▶ n8n ──▶ LangChain + Ollama ──▶ PostgreSQL ──▶ Dashboard React
-                                  │            │                              │
-                                  │            └─ VirusTotal · AbuseIPDB       │
-                                  │               GeoIP · MITRE · memoria FP   │
-                                  └──▶ Slack · osTicket · bitácora ◀──────────┘
+Eventos simulados ──webhook──▶ n8n ──▶ API ──▶ Triaje + LLM remoto ──▶ PostgreSQL ──▶ Dashboard
 ```
 
-- **n8n** ingesta, normaliza, deduplica, enruta por severidad y notifica.
-- **LangChain** enriquece y clasifica con un agente de herramientas; si Ollama cae, un motor
+- **n8n** recibe el evento y orquesta la ingesta y el triaje mediante la API.
+- **LangChain** enriquece y clasifica con un agente de herramientas; si el proveedor LLM falla, un motor
   heurístico determinista sigue triando (modo `degraded`) — la alerta nunca se pierde.
 - **FastAPI** expone la API del dashboard, aplica RBAC, persiste el triaje y genera reportes.
 - **React** ofrece dashboard, cola de alertas, detalle con resumen LLM, usuarios/roles,
@@ -37,7 +33,7 @@ Wazuh / OPNsense ──webhook──▶ n8n ──▶ LangChain + Ollama ──�
 
 | Requisito | Implementación verificada |
 |---|---|
-| Stack justificado | FastAPI + SQLAlchemy 2 async + PostgreSQL 16 + React 18/TS/Vite + n8n + LangChain/Ollama. Ver [07-stack](docs/07-stack-tecnologico.md) |
+| Stack justificado | FastAPI + SQLAlchemy 2 async + PostgreSQL 16 + React 18/TS/Vite + n8n + LangChain y API LLM. |
 | PostgreSQL principal | 13 tablas, 5 vistas, 11 enums, `JSONB`, `INET`, `ARRAY`, `percentile_cont` para el P95 del MTTT |
 | Dashboard de métricas | 8 endpoints de agregación; KPIs de volumen, MTTT, SLA, FP, automatización, severidad, top orígenes y tendencia |
 | Reportes PDF/Word/Excel | ReportLab, python-docx y openpyxl; 3 tipos de reporte × 3 formatos, con historial y descarga auditada |
@@ -51,7 +47,6 @@ Wazuh / OPNsense ──webhook──▶ n8n ──▶ LangChain + Ollama ──�
 ```bash
 cp .env.example .env          # cambiar SECRET_KEY, contraseñas y claves
 docker compose up -d --build
-docker compose exec ollama ollama pull llama3.1:8b   # perfil "llm"
 
 # Frontend   → http://localhost:8090
 # API docs   → http://localhost:8010/docs
@@ -59,8 +54,28 @@ docker compose exec ollama ollama pull llama3.1:8b   # perfil "llm"
 # PostgreSQL → localhost:5439
 ```
 
-> Ollama es opcional. Sin él, el microservicio responde con el motor heurístico y lo marca
-> como `degraded` (comportamiento esperado, no un fallo).
+> Sin una clave LLM configurada, el microservicio usa el motor heurístico y marca el resultado
+> como `degraded`. El endpoint de salud indica si hay una clave configurada; no verifica al proveedor.
+
+### Proveedor LLM
+
+En `.env` configura `LLM_ENABLED=true`, `LLM_API_KEY`, `LLM_BASE_URL` y `LLM_MODEL`, y recrea el servicio con
+`docker compose up -d --build triage`. El ejemplo usa Groq:
+
+```env
+LLM_BASE_URL=https://api.groq.com/openai/v1
+LLM_MODEL=llama-3.3-70b-versatile
+LLM_API_KEY=tu_clave
+LLM_ENABLED=true
+LLM_TIMEOUT_SECONDS=30
+TRIAGE_TIMEOUT_SECONDS=75
+```
+
+Para Google AI Studio, usa `LLM_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai/`,
+la clave de Gemini y un modelo Gemini disponible para tu cuenta. Consulta la documentación de
+[Groq](https://console.groq.com/docs/openai) y [Gemini](https://ai.google.dev/gemini-api/docs/openai/).
+El texto y los datos de la alerta se envían al proveedor configurado: utiliza datos ficticios en la demo.
+El timeout del backend debe ser mayor que el del LLM para permitir el enriquecimiento y el respaldo.
 
 ### Puertos de esta instalación
 
@@ -121,7 +136,7 @@ npm run dev            # http://127.0.0.1:8090 (proxy /api → :8010)
 
 ```text
 soc-lite/
-├── docker-compose.yml          # db, backend, triage, frontend, n8n, ollama (perfil)
+├── docker-compose.yml          # db, backend, triage, frontend y n8n
 ├── .env.example                # 60+ variables documentadas
 ├── Makefile                    # up, down, schema, seed, test, build, smoke
 ├── db/
@@ -135,7 +150,7 @@ soc-lite/
 │   ├── app/services/           # ingesta, triaje, métricas, reportes, auditoría
 │   ├── app/middleware/         # request-id, cabeceras, bitácora ENTER/EXIT
 │   └── tests/                  # 14 pruebas de integración contra PostgreSQL real
-├── langchain-service/          # FastAPI + LangChain + Ollama
+├── langchain-service/          # FastAPI + LangChain + API LLM
 │   ├── app/agents/             # agente con tool calling y memoria de casos
 │   ├── app/tools/              # VirusTotal, AbuseIPDB, GeoIP, MITRE
 │   ├── app/chains/             # prompts versionados y defensas anti-inyección
@@ -147,7 +162,7 @@ soc-lite/
 │   │                           # roles, auditoría, reportes
 │   └── deploy/nginx.conf       # SPA + proxy /api + cabeceras + CSP
 ├── n8n/
-│   └── soc_lite_triage_workflow.json   # 21 nodos (10 operativos + soporte), importable
+│   └── soc_lite_triage_workflow.json   # flujo académico importable
 ├── docs/                       # arquitectura, modelo de datos, backend, frontend, workflow,
 │                               # datasets, stack, contrato de API y capturas
 └── backend/storage/reports/    # PDF/Word/Excel generados en local
@@ -168,6 +183,31 @@ soc-lite/
 | — | Contrato de API v1 | [00-contrato-api.md](docs/00-contrato-api.md) |
 
 ## Prueba de humo
+
+### Simulación continua y avisos en vivo
+
+Con los servicios principales levantados y el workflow **SOC-Lite · Triaje académico** publicado
+en n8n, inicia o detén el generador opcional:
+
+```bash
+make simulator-start
+make simulator-stop
+```
+
+El simulador envía inmediatamente una alerta ficticia y después espera `SIMULATOR_INTERVAL_SECONDS`
+(30 segundos por defecto) entre envíos. Alterna los escenarios incluidos en `SIMULATOR_SCENARIOS`
+(`ssh,ransomware,benign` por defecto); si el webhook falla, lo informa en `docker compose logs simulator`
+y continúa con el siguiente evento. La demora del triaje se suma al intervalo. Cambiar las variables
+en `.env` y volver a ejecutar `make simulator-start` recrea el contenedor con la nueva configuración.
+
+La consola recibe por WebSocket las alertas guardadas y el resultado del triaje. Una conexión perdida
+se restablece y la interfaz vuelve a cargar los datos; los avisos que hayan ocurrido durante la
+desconexión no se reproducen. El sonido está desactivado inicialmente: actívalo en la cabecera para
+escuchar las alertas altas y críticas. El generador produce datos ficticios y no realiza ataques.
+
+El canal en vivo usa memoria local y requiere un único proceso de backend; para varias réplicas se
+necesitaría un sistema compartido de publicación de eventos. El workflow anterior no es necesario
+para esta simulación.
 
 ```bash
 # 1. Autenticarse
@@ -196,12 +236,21 @@ curl -s -X POST http://localhost:8010/api/v1/reports \
 ## Importar el workflow en n8n
 
 1. Abrir `http://localhost:5679` y crear la cuenta de propietario.
-2. **Workflows → Import from File** → `n8n/soc_lite_triage_workflow.json`.
-3. Crear la credencial **PostgreSQL** apuntando a `db:5432` (usuario `soclite`, base `soclite`)
-   y asignarla a los tres nodos PostgreSQL.
-4. Configurar variables de entorno del contenedor: `LANGCHAIN_URL`, `SLACK_WEBHOOK_URL`,
-   `OSTICKET_URL`, `OSTICKET_TOKEN`, `SOCLITE_API_URL`, `SOCLITE_INGEST_KEY`.
-5. Activar el workflow; el webhook queda en `POST http://localhost:5679/webhook/soc-lite-ingest`.
+2. Con el servicio n8n en ejecución, importar el workflow desde la raíz del proyecto:
+
+   ```bash
+   make n8n-import
+   ```
+
+   Actualizar la página y buscar **SOC-Lite · Triaje académico** en Workflows.
+   También se puede importar desde la interfaz con **Workflows → Import from File** y el archivo
+   `n8n/soc_lite_triage_workflow.json`. El montaje del archivo en Docker no lo importa por sí solo.
+   Importarlo de nuevo puede crear una copia; no es necesario hacerlo en cada arranque.
+3. Publicar el workflow en la interfaz. Utiliza la clave de ingesta configurada en el contenedor
+   para llamar a la API; no necesita credenciales PostgreSQL en n8n.
+4. Ejecutar `make demo-ssh` y abrir la alerta resultante en la consola. El analista puede validar
+   el resultado, crear un incidente y gestionar su resolución. Para probar duplicados, invocar
+   `scripts/simulate_bruteforce.py` dos veces con los mismos `--id` y `--timestamp`.
 
 La tabla de los 10 nodos operativos, sus entradas/salidas y las consultas SQL están en
 [05-workflow-n8n.md](docs/05-workflow-n8n.md).
@@ -217,16 +266,14 @@ La tabla de los 10 nodos operativos, sus entradas/salidas y las consultas SQL es
 | Auditoría | `GET /audit/verify-chain` | cadena íntegra |
 | Frontend | `tsc --noEmit` + `vite build` | 0 errores TS; ~830 KB (gzip ~240 KB) |
 | UI | capturas con Chrome headless | 9 pantallas en `docs/screenshots/` |
-| n8n | importación en `n8n:latest` + SQL validado contra PostgreSQL | workflow importado (21 nodos) |
+| n8n | webhook, API de ingesta y triaje | verificación de extremo a extremo según la instalación |
 
 ### Limitaciones conocidas
 
-- **Ollama no estaba disponible** en el entorno de verificación: el servicio de triaje respondió
-  con el motor heurístico (`status=degraded`). El camino LLM está implementado y se activa al
-  detectar Ollama en `OLLAMA_BASE_URL`; requiere `ollama pull llama3.1:8b`.
-- **No se ejecutó el workflow n8n de punta a punta** porque requiere crear la credencial
-  PostgreSQL y las variables de Slack/osTicket en la instancia. Sí se importó en n8n y se
-  validaron las dos consultas SQL contra la base real.
+- Sin clave LLM, el servicio utiliza el motor heurístico (`status=degraded`). La conexión real al
+  proveedor depende de una clave y modelo válidos.
+- El workflow debe publicarse en n8n antes de usar el webhook. Slack y osTicket no forman parte
+  del recorrido académico actual; los tickets del backend son registros locales.
 - Las APIs externas (VirusTotal, AbuseIPDB, GeoIP) requieren claves; sin ellas se marcan como
   `skipped` y el veredicto baja su confianza.
 - El entorno local no incluye TLS; en producción se termina en Nginx/ingress con certificados.

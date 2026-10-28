@@ -1,4 +1,4 @@
-"""Agente de triaje con LangChain + Ollama y degradación a heurística local.
+"""Agente de triaje con API compatible con OpenAI y respaldo heurístico.
 
 Flujo:
   1. Enriquecimiento con herramientas (VirusTotal, AbuseIPDB, GeoIP, MITRE).
@@ -9,6 +9,7 @@ Flujo:
 """
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import re
@@ -18,10 +19,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-import httpx
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
 from langchain_core.tools import BaseTool, tool
-from langchain_ollama import ChatOllama
+from langchain_openai import ChatOpenAI
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 from app.chains import prompts
@@ -198,32 +198,20 @@ def _extract_json(content: Any) -> dict[str, Any]:
 
 @dataclass
 class TriageAgent:
-    _llm_checked_at: float = 0.0
-    _llm_available: bool = False
-
     async def _available(self) -> bool:
-        if not settings.llm_enabled:
-            return False
-        if time.monotonic() - self._llm_checked_at < 30:
-            return self._llm_available
-        self._llm_checked_at = time.monotonic()
-        try:
-            async with httpx.AsyncClient(timeout=2.0) as client:
-                response = await client.get(f"{settings.ollama_base_url.rstrip('/')}/api/tags")
-            self._llm_available = response.status_code == 200
-        except httpx.HTTPError:
-            self._llm_available = False
-        return self._llm_available
+        return bool(settings.llm_enabled and settings.llm_api_key.strip())
 
     async def _llm_triage(
         self, alert: AlertIn, enrichment: list[dict[str, Any]], hint: dict[str, Any] | None
     ) -> TriageOut:
         started = time.perf_counter()
-        llm = ChatOllama(
-            model=settings.ollama_model,
-            base_url=settings.ollama_base_url,
+        llm = ChatOpenAI(
+            model=settings.llm_model,
+            base_url=settings.llm_base_url,
+            api_key=settings.llm_api_key,
             temperature=settings.llm_temperature,
-            client_kwargs={"timeout": settings.llm_timeout_seconds},
+            timeout=settings.llm_timeout_seconds,
+            max_retries=0,
         )
         tools = _build_tools()
         tool_map = {item.name: item for item in tools}
@@ -280,7 +268,7 @@ class TriageAgent:
             reasoning=decision.reasoning,
             recommended_actions=decision.recommended_actions[:5],
             mitre_techniques=mitre[:10],
-            model=settings.ollama_model,
+            model=settings.llm_model,
             prompt_version=prompts.PROMPT_VERSION,
             latency_ms=latency_ms,
             status="completed",
@@ -298,7 +286,9 @@ class TriageAgent:
 
         if await self._available():
             try:
-                output = await self._llm_triage(alert, enrichment, hint)
+                output = await asyncio.wait_for(
+                    self._llm_triage(alert, enrichment, hint), timeout=settings.llm_timeout_seconds
+                )
                 memory.record(alert, output)
                 return output
             except Exception as exc:  # validación, timeout, modelo sin tool-calling...
@@ -307,7 +297,7 @@ class TriageAgent:
                 memory.record(alert, output)
                 return output
 
-        output = heuristic(alert, enrichment, hint, reason="Ollama no disponible")
+        output = heuristic(alert, enrichment, hint, reason="LLM deshabilitado o sin clave configurada")
         memory.record(alert, output)
         return output
 

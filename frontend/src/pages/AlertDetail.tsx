@@ -78,7 +78,7 @@ export default function AlertDetailPage() {
   const feedback = useMutation({
     mutationFn: () => alertsApi.feedback(id, feedbackFp, comment || undefined),
     onSuccess: () => {
-      push('Validación registrada. La memoria del triaje fue actualizada.', 'success')
+      push('Validación registrada.', 'success')
       setFeedbackOpen(false)
       setComment('')
       invalidate()
@@ -131,6 +131,7 @@ export default function AlertDetailPage() {
         subtitle={`${alert.source} · regla ${alert.rule_id ?? '—'} · ${alert.agent_name ?? 'activo desconocido'} · ${formatDate(alert.received_at)}`}
         actions={
           <>
+            {alert.raw_payload.demo === true && <span className="chip border-accent/30 text-accent">Evento simulado</span>}
             <SeverityBadge severity={alert.severity} />
             <StatusBadge status={alert.status} />
             {hasPermission('triage:run') && (
@@ -474,7 +475,7 @@ export default function AlertDetailPage() {
         open={feedbackOpen}
         onClose={() => setFeedbackOpen(false)}
         title={feedbackFp ? 'Marcar como falso positivo' : 'Confirmar verdadero positivo'}
-        description="La validación alimenta la memoria de triaje y las métricas de calidad."
+        description="La validación queda registrada para el equipo y las métricas de calidad."
         footer={
           <>
             <button className="btn-secondary" onClick={() => setFeedbackOpen(false)}>

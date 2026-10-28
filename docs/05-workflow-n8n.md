@@ -1,5 +1,10 @@
 # 5. Flujo de nodos n8n
 
+> **Actualización del laboratorio:** el workflow vigente delega ingesta, deduplicación, persistencia
+> y triaje a la API, y no usa nodos PostgreSQL, Slack ni osTicket. Importa y publica el JSON y usa
+> `make demo-ssh` para enviar una alerta simulada. El resto de este documento describe el diseño
+> anterior y queda como referencia histórica; no refleja el JSON vigente.
+
 > Workflow importable: [`n8n/soc_lite_triage_workflow.json`](../n8n/soc_lite_triage_workflow.json)
 > · 21 nodos (10 operativos + soporte) · importado y validado en `n8nio/n8n:latest`.
 
@@ -358,8 +363,10 @@ este JSON para no acoplar credenciales; el flujo principal ya cubre el fallo de 
 
 ## 5.6 Instalación y activación
 
-1. **Importar:** n8n → *Workflows* → *Import from File* →
-   `n8n/soc_lite_triage_workflow.json`.
+1. **Importar:** crear primero la cuenta de propietario en n8n y ejecutar `make n8n-import`
+   desde la raíz del proyecto. Actualizar la página de n8n para ver el workflow. Como alternativa,
+   usar *Workflows* → *Import from File* → `n8n/soc_lite_triage_workflow.json`. El archivo
+   montado en el contenedor no se importa automáticamente; repetir la importación puede crear una copia.
 2. **Credencial PostgreSQL:** crear `SOC-Lite PostgreSQL` con host `db`, puerto `5432`, base
    `soclite`, usuario/clave del `.env`. Asignarla a **Persistir alerta**, **Guardar triaje** y
    **Marcar pendiente**.
@@ -374,7 +381,7 @@ este JSON para no acoplar credenciales; el flujo principal ya cubre el fallo de 
    OSTICKET_TOKEN=...
    ```
 
-4. **Activar** el workflow (toggle *Active*).
+4. **Activar o publicar** el workflow desde la interfaz.
 5. **URL del webhook:** `http://<host>:5679/webhook/soc-lite-ingest`.
 6. **Probar:**
 

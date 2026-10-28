@@ -1,129 +1,70 @@
 {
-  "name": "SOC-Lite · Triaje automático de alertas",
+  "name": "SOC-Lite · Triaje académico",
   "nodes": [
     {
       "parameters": {
         "httpMethod": "POST",
         "path": "soc-lite-ingest",
         "responseMode": "responseNode",
-        "options": {
-          "rawBody": false
-        }
+        "options": {}
       },
-      "id": "webhook-siem",
+      "id": "f06e64db-c690-45f1-a2a2-706730bdef01",
       "name": "Webhook SIEM",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
       "position": [
-        -200,
-        300
+        0,
+        0
       ],
-      "webhookId": "a1b2c3d4-0001-4000-8000-000000000001"
+      "webhookId": "dd9e4ffc-c9e3-4654-893f-9f0a72d8123e"
     },
     {
       "parameters": {
-        "jsCode": "\n// Normaliza el payload crudo de Wazuh / OPNsense / Suricata.\nconst body = $json.body ?? $json;\nconst rule = body.rule ?? {};\nconst agent = body.agent ?? {};\nconst data = body.data ?? {};\n\nconst level = Number(rule.level ?? body.rule_level ?? body.level ?? 0);\nlet severity = body.severity;\nif (!severity) {\n  if (level >= 12) severity = 'critical';\n  else if (level >= 10) severity = 'high';\n  else if (level >= 7) severity = 'medium';\n  else if (level >= 4) severity = 'low';\n  else severity = 'info';\n}\nseverity = String(severity).toLowerCase();\nconst allowed = ['critical', 'high', 'medium', 'low', 'info'];\nif (!allowed.includes(severity)) severity = 'medium';\n\nconst srcIp = data.srcip ?? data.src_ip ?? body.src_ip ?? body.srcip ?? null;\nconst dstIp = data.dstip ?? data.dst_ip ?? body.dst_ip ?? body.dstip ?? null;\nconst description = String(rule.description ?? body.description ?? body.message ?? 'Alerta sin descripción').slice(0, 2000);\nconst source = String(body.source ?? 'wazuh');\nconst externalId = String(body.id ?? body.alert_id ?? body.event_id ?? '');\nconst ruleId = String(rule.id ?? body.rule_id ?? '');\nconst occurredAt = body.timestamp ?? body.occurred_at ?? new Date().toISOString();\n\nconst tags = [];\nconst lower = description.toLowerCase();\nif (/brute|fuerza bruta|failed password/.test(lower)) tags.push('bruteforce');\nif (/ransom|cifrado|locked/.test(lower)) tags.push('ransomware');\nif (/scan|escaneo/.test(lower)) tags.push('recon');\nif (/powershell|cmd\\.exe|wmic/.test(lower)) tags.push('execution');\nif (/sql|xss|traversal|cve-|exploit/.test(lower)) tags.push('web-exploit');\nif (/dns|domain|dominio/.test(lower)) tags.push('dns');\nif (/firewall|block|deny/.test(lower)) tags.push('firewall');\nif (severity === 'critical' || severity === 'high') tags.push('high-impact');\n\nconst crypto = require('crypto');\nconst window = Math.floor(new Date(occurredAt).getTime() / (15 * 60 * 1000));\nconst fingerprint = crypto.createHash('sha256')\n  .update([source, ruleId, srcIp ?? '', dstIp ?? '', externalId, window].join('|'))\n  .digest('hex');\n\nconst record = {\n  external_id: externalId || null,\n  source,\n  rule_id: ruleId || null,\n  rule_level: level || null,\n  description,\n  src_ip: srcIp,\n  dst_ip: dstIp,\n  dst_port: data.dstport ?? body.dst_port ?? null,\n  protocol: data.protocol ?? body.protocol ?? null,\n  agent_name: agent.name ?? body.agent_name ?? null,\n  asset_criticality: Math.min(Math.max(Number(body.asset_criticality ?? agent.criticality ?? 3), 1), 5),\n  severity,\n  fingerprint,\n  raw_payload: body,\n  tags: tags.join('|'),\n  occurred_at: occurredAt,\n};\n\nreturn [{\n  json: {\n    ...record,\n    passes_filter: ['critical', 'high', 'medium'].includes(severity),\n    payload_b64: Buffer.from(JSON.stringify(record)).toString('base64'),\n  },\n}];\n"
-      },
-      "id": "normalizar-alerta",
-      "name": "Normalizar alerta",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        20,
-        300
-      ]
-    },
-    {
-      "parameters": {
-        "conditions": {
-          "options": {
-            "caseSensitive": true,
-            "leftValue": "",
-            "typeValidation": "loose",
-            "version": 2
-          },
-          "conditions": [
+        "method": "POST",
+        "url": "={{ $env.SOCLITE_API_URL + '/api/v1/alerts/ingest' }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
             {
-              "id": "sev-1",
-              "leftValue": "={{ $json.severity }}",
-              "rightValue": "critical",
-              "operator": {
-                "type": "string",
-                "operation": "equals"
-              }
-            },
-            {
-              "id": "sev-2",
-              "leftValue": "={{ $json.severity }}",
-              "rightValue": "high",
-              "operator": {
-                "type": "string",
-                "operation": "equals"
-              }
-            },
-            {
-              "id": "sev-3",
-              "leftValue": "={{ $json.severity }}",
-              "rightValue": "medium",
-              "operator": {
-                "type": "string",
-                "operation": "equals"
-              }
+              "name": "X-Ingest-Key",
+              "value": "={{ $env.SOCLITE_INGEST_KEY }}"
             }
-          ],
-          "combinator": "or"
+          ]
         },
-        "options": {}
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify($json.body) }}",
+        "options": {
+          "timeout": 70000
+        }
       },
-      "id": "severidad-minima",
-      "name": "Severidad minima",
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 2.2,
+      "id": "f06e64db-c690-45f1-a2a2-706730bdef02",
+      "name": "Ingestar alerta",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
       "position": [
         240,
-        300
+        0
       ]
-    },
-    {
-      "parameters": {
-        "operation": "executeQuery",
-        "query": "\nINSERT INTO alerts (\n    external_id, source, rule_id, rule_level, description, src_ip, dst_ip, dst_port,\n    protocol, agent_name, asset_criticality, severity, status, fingerprint, raw_payload,\n    tags, occurred_at, received_at, last_seen_at\n)\nSELECT\n    NULLIF(x.external_id, ''), x.source, NULLIF(x.rule_id, ''), x.rule_level, x.description,\n    NULLIF(x.src_ip, '')::inet, NULLIF(x.dst_ip, '')::inet, x.dst_port, x.protocol,\n    x.agent_name, COALESCE(x.asset_criticality, 3), x.severity::severity_level, 'pending',\n    x.fingerprint, x.raw_payload, string_to_array(COALESCE(x.tags, ''), '|'),\n    COALESCE(NULLIF(x.occurred_at, '')::timestamptz, now()), now(), now()\nFROM jsonb_to_record(convert_from(decode($1, 'base64'), 'UTF8')::jsonb) AS x(\n    external_id text, source text, rule_id text, rule_level smallint, description text,\n    src_ip text, dst_ip text, dst_port integer, protocol text, agent_name text,\n    asset_criticality smallint, severity text, fingerprint text, raw_payload jsonb,\n    tags text, occurred_at text\n)\nON CONFLICT (fingerprint) DO UPDATE\n   SET dedup_count = alerts.dedup_count + 1,\n       last_seen_at = now()\nRETURNING id, severity, (xmax <> 0) AS deduplicated;\n",
-        "options": {
-          "queryReplacement": "={{ $json.payload_b64 }}"
-        }
-      },
-      "id": "persistir-alerta",
-      "name": "Persistir alerta",
-      "type": "n8n-nodes-base.postgres",
-      "typeVersion": 2.4,
-      "position": [
-        460,
-        300
-      ],
-      "credentials": {
-        "postgres": {
-          "id": "soc-lite-postgres",
-          "name": "SOC-Lite PostgreSQL"
-        }
-      }
     },
     {
       "parameters": {
         "conditions": {
           "options": {
             "caseSensitive": true,
-            "leftValue": "",
-            "typeValidation": "loose",
+            "typeValidation": "strict",
             "version": 2
           },
           "conditions": [
             {
-              "id": "dup-1",
+              "id": "duplicate",
               "leftValue": "={{ $json.deduplicated }}",
               "rightValue": true,
               "operator": {
                 "type": "boolean",
-                "operation": "true"
+                "operation": "true",
+                "singleValue": true
               }
             }
           ],
@@ -131,466 +72,88 @@
         },
         "options": {}
       },
-      "id": "duplicada",
+      "id": "f06e64db-c690-45f1-a2a2-706730bdef03",
       "name": "Duplicada",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
       "position": [
-        680,
-        300
+        480,
+        0
       ]
     },
     {
       "parameters": {
         "method": "POST",
-        "url": "={{ $env.LANGCHAIN_URL || 'http://langchain:8001' }}/triage",
-        "sendBody": true,
-        "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ alert_id: $('Persistir alerta').item.json.id, source: $('Normalizar alerta').item.json.source, rule_id: $('Normalizar alerta').item.json.rule_id, rule_level: $('Normalizar alerta').item.json.rule_level, description: $('Normalizar alerta').item.json.description, src_ip: $('Normalizar alerta').item.json.src_ip, dst_ip: $('Normalizar alerta').item.json.dst_ip, agent_name: $('Normalizar alerta').item.json.agent_name, asset_criticality: $('Normalizar alerta').item.json.asset_criticality, severity: $('Normalizar alerta').item.json.severity, tags: ($('Normalizar alerta').item.json.tags || '').split('|').filter(Boolean), raw_payload: $('Normalizar alerta').item.json.raw_payload }) }}",
-        "options": {
-          "timeout": 60000
-        }
-      },
-      "id": "triaje-langchain",
-      "name": "Triaje LangChain",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [
-        900,
-        380
-      ],
-      "onError": "continueErrorOutput",
-      "retryOnFail": true,
-      "maxTries": 2,
-      "waitBetweenTries": 2000
-    },
-    {
-      "parameters": {
-        "rules": {
-          "values": [
-            {
-              "conditions": {
-                "options": {
-                  "caseSensitive": true,
-                  "leftValue": "",
-                  "typeValidation": "loose",
-                  "version": 2
-                },
-                "conditions": [
-                  {
-                    "id": "sw-1",
-                    "leftValue": "={{ $json.severity }}",
-                    "rightValue": "critical",
-                    "operator": {
-                      "type": "string",
-                      "operation": "equals"
-                    }
-                  },
-                  {
-                    "id": "sw-2",
-                    "leftValue": "={{ $json.severity }}",
-                    "rightValue": "high",
-                    "operator": {
-                      "type": "string",
-                      "operation": "equals"
-                    }
-                  }
-                ],
-                "combinator": "or"
-              },
-              "renameOutput": true,
-              "outputKey": "Alta / Crítica"
-            },
-            {
-              "conditions": {
-                "options": {
-                  "caseSensitive": true,
-                  "leftValue": "",
-                  "typeValidation": "loose",
-                  "version": 2
-                },
-                "conditions": [
-                  {
-                    "id": "sw-3",
-                    "leftValue": "={{ $json.severity }}",
-                    "rightValue": "medium",
-                    "operator": {
-                      "type": "string",
-                      "operation": "equals"
-                    }
-                  }
-                ],
-                "combinator": "and"
-              },
-              "renameOutput": true,
-              "outputKey": "Media"
-            },
-            {
-              "conditions": {
-                "options": {
-                  "caseSensitive": true,
-                  "leftValue": "",
-                  "typeValidation": "loose",
-                  "version": 2
-                },
-                "conditions": [
-                  {
-                    "id": "sw-4",
-                    "leftValue": "={{ $json.severity }}",
-                    "rightValue": "low",
-                    "operator": {
-                      "type": "string",
-                      "operation": "equals"
-                    }
-                  },
-                  {
-                    "id": "sw-5",
-                    "leftValue": "={{ $json.severity }}",
-                    "rightValue": "info",
-                    "operator": {
-                      "type": "string",
-                      "operation": "equals"
-                    }
-                  }
-                ],
-                "combinator": "or"
-              },
-              "renameOutput": true,
-              "outputKey": "Baja / Info"
-            }
-          ]
-        },
-        "options": {}
-      },
-      "id": "switch-severidad",
-      "name": "Switch severidad",
-      "type": "n8n-nodes-base.switch",
-      "typeVersion": 3,
-      "position": [
-        1120,
-        380
-      ]
-    },
-    {
-      "parameters": {
-        "jsCode": "\n// Prepara el resultado del agente para persistirlo como un único parámetro JSON (base64).\nconst t = $json;\nconst alertId = $('Persistir alerta').item.json.id;\nconst payload = {\n  alert_id: alertId,\n  verdict: t.verdict ?? 'inconclusive',\n  severity: t.severity ?? 'medium',\n  confidence: Number(t.confidence ?? 0.5),\n  summary: String(t.summary ?? 'Triaje sin resumen').slice(0, 1200),\n  reasoning: t.reasoning ?? null,\n  recommended_actions: t.recommended_actions ?? [],\n  mitre_techniques: t.mitre_techniques ?? [],\n  model: t.model ?? 'langchain',\n  prompt_version: t.prompt_version ?? 'v1.2.0',\n  latency_ms: Number(t.latency_ms ?? 0),\n  status: t.status ?? 'completed',\n  needs_human: Boolean(t.needs_human),\n  fallback_used: Boolean(t.fallback_used),\n  raw_response: t,\n};\nreturn [{\n  json: {\n    alert_id: alertId,\n    severity: payload.severity,\n    verdict: payload.verdict,\n    summary: payload.summary,\n    status: payload.status,\n    payload_b64: Buffer.from(JSON.stringify(payload)).toString('base64'),\n  },\n}];\n"
-      },
-      "id": "preparar-guardado",
-      "name": "Preparar guardado",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        1340,
-        380
-      ]
-    },
-    {
-      "parameters": {
-        "operation": "executeQuery",
-        "query": "\nWITH payload AS (\n    SELECT convert_from(decode($1, 'base64'), 'UTF8')::jsonb AS j\n), ins AS (\n    INSERT INTO triage_results (\n        alert_id, verdict, severity, confidence, summary, reasoning, recommended_actions,\n        mitre_techniques, model, prompt_version, latency_ms, status, needs_human,\n        fallback_used, raw_response, triaged_at\n    )\n    SELECT\n        (j->>'alert_id')::uuid,\n        (j->>'verdict')::triage_verdict,\n        (j->>'severity')::severity_level,\n        COALESCE((j->>'confidence')::numeric, 0.5),\n        j->>'summary',\n        j->>'reasoning',\n        COALESCE(j->'recommended_actions', '[]'::jsonb),\n        COALESCE(ARRAY(SELECT jsonb_array_elements_text(j->'mitre_techniques')), ARRAY[]::text[]),\n        j->>'model',\n        j->>'prompt_version',\n        COALESCE((j->>'latency_ms')::int, 0),\n        COALESCE(NULLIF(j->>'status', ''), 'completed')::triage_status,\n        COALESCE((j->>'needs_human')::boolean, false),\n        COALESCE((j->>'fallback_used')::boolean, false),\n        COALESCE(j->'raw_response', '{}'::jsonb),\n        now()\n    FROM payload\n    RETURNING alert_id, verdict, severity\n)\nUPDATE alerts a\n   SET status = CASE\n       WHEN ins.verdict = 'false_positive' THEN 'false_positive'::alert_status\n       WHEN ins.verdict = 'true_positive' AND ins.severity IN ('critical','high') THEN 'escalated'::alert_status\n       ELSE 'triaged'::alert_status\n   END\n  FROM ins\n WHERE a.id = ins.alert_id\nRETURNING a.id, a.status;\n",
-        "options": {
-          "queryReplacement": "={{ $json.payload_b64 }}"
-        }
-      },
-      "id": "guardar-triaje",
-      "name": "Guardar triaje",
-      "type": "n8n-nodes-base.postgres",
-      "typeVersion": 2.4,
-      "position": [
-        1560,
-        380
-      ],
-      "credentials": {
-        "postgres": {
-          "id": "soc-lite-postgres",
-          "name": "SOC-Lite PostgreSQL"
-        }
-      }
-    },
-    {
-      "parameters": {
-        "conditions": {
-          "options": {
-            "caseSensitive": true,
-            "leftValue": "",
-            "typeValidation": "loose",
-            "version": 2
-          },
-          "conditions": [
-            {
-              "id": "noti-1",
-              "leftValue": "={{ $('Preparar guardado').item.json.severity }}",
-              "rightValue": "critical",
-              "operator": {
-                "type": "string",
-                "operation": "equals"
-              }
-            },
-            {
-              "id": "noti-2",
-              "leftValue": "={{ $('Preparar guardado').item.json.severity }}",
-              "rightValue": "high",
-              "operator": {
-                "type": "string",
-                "operation": "equals"
-              }
-            }
-          ],
-          "combinator": "or"
-        },
-        "options": {}
-      },
-      "id": "notificar",
-      "name": "Notificar",
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 2.2,
-      "position": [
-        1780,
-        380
-      ]
-    },
-    {
-      "parameters": {
-        "method": "POST",
-        "url": "={{ $env.SLACK_WEBHOOK_URL }}",
-        "sendBody": true,
-        "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ text: '🚨 *SOC-Lite · Alerta ' + $('Preparar guardado').item.json.severity.toUpperCase() + '*\\n' + $('Preparar guardado').item.json.summary + '\\nVeredicto: ' + $('Preparar guardado').item.json.verdict + ' · Activo: ' + ($('Normalizar alerta').item.json.agent_name || 'n/d') }) }}",
-        "options": {
-          "timeout": 60000,
-          "response": {
-            "response": {
-              "neverError": true
-            }
-          }
-        }
-      },
-      "id": "slack",
-      "name": "Slack",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [
-        2000,
-        280
-      ],
-      "onError": "continueRegularOutput"
-    },
-    {
-      "parameters": {
-        "method": "POST",
-        "url": "={{ $env.OSTICKET_URL || 'http://osticket.local' }}/api/v1/tickets",
-        "sendBody": true,
-        "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ subject: 'SOC-Lite: ' + $('Normalizar alerta').item.json.description.slice(0, 80), alert_id: $('Persistir alerta').item.json.id, priority: $('Preparar guardado').item.json.severity, message: $('Preparar guardado').item.json.summary }) }}",
-        "options": {
-          "timeout": 60000,
-          "response": {
-            "response": {
-              "neverError": true
-            }
-          }
-        },
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "Authorization",
-              "value": "={{ 'Bearer ' + ($env.OSTICKET_TOKEN || '') }}"
-            }
-          ]
-        }
-      },
-      "id": "osticket",
-      "name": "osTicket",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [
-        2220,
-        280
-      ],
-      "onError": "continueRegularOutput"
-    },
-    {
-      "parameters": {
-        "method": "POST",
-        "url": "={{ ($env.SOCLITE_API_URL || 'http://backend:8000') + '/api/v1/audit/events' }}",
-        "sendBody": true,
-        "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ module: 'triage', action: 'TRIAGE_COMPLETED', entity_type: 'alert', entity_id: $('Persistir alerta').item.json.id, result: 'success', username: 'n8n', detail: { verdict: $('Preparar guardado').item.json.verdict, severity: $('Preparar guardado').item.json.severity, status: $('Preparar guardado').item.json.status, workflow: 'soc_lite_triage' } }) }}",
-        "options": {
-          "timeout": 60000,
-          "response": {
-            "response": {
-              "neverError": true
-            }
-          }
-        },
+        "url": "={{ $env.SOCLITE_API_URL + '/api/v1/alerts/' + $json.alert_id + '/triage/automation' }}",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
             {
               "name": "X-Ingest-Key",
-              "value": "={{ $env.SOCLITE_INGEST_KEY || 'dev-ingest-key-change-me' }}"
+              "value": "={{ $env.SOCLITE_INGEST_KEY }}"
             }
           ]
-        }
-      },
-      "id": "auditoria",
-      "name": "Auditoria",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [
-        2440,
-        380
-      ],
-      "onError": "continueRegularOutput"
-    },
-    {
-      "parameters": {
-        "operation": "executeQuery",
-        "query": "UPDATE alerts SET status = 'pending' WHERE id = $1::uuid RETURNING id, status;",
-        "options": {
-          "queryReplacement": "={{ $('Persistir alerta').item.json.id }}"
-        }
-      },
-      "id": "marcar-pendiente",
-      "name": "Marcar pendiente",
-      "type": "n8n-nodes-base.postgres",
-      "typeVersion": 2.4,
-      "position": [
-        1340,
-        620
-      ],
-      "credentials": {
-        "postgres": {
-          "id": "soc-lite-postgres",
-          "name": "SOC-Lite PostgreSQL"
-        }
-      }
-    },
-    {
-      "parameters": {
-        "method": "POST",
-        "url": "={{ ($env.SOCLITE_API_URL || 'http://backend:8000') + '/api/v1/audit/events' }}",
-        "sendBody": true,
-        "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ module: 'triage', action: 'TRIAGE_FAILED', entity_type: 'alert', entity_id: $('Persistir alerta').item.json.id, result: 'failure', username: 'n8n', detail: { reason: 'microservicio LangChain no disponible', workflow: 'soc_lite_triage' } }) }}",
-        "options": {
-          "timeout": 60000,
-          "response": {
-            "response": {
-              "neverError": true
-            }
-          }
         },
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "X-Ingest-Key",
-              "value": "={{ $env.SOCLITE_INGEST_KEY || 'dev-ingest-key-change-me' }}"
-            }
-          ]
+        "options": {
+          "timeout": 90000
         }
       },
-      "id": "auditoria-error",
-      "name": "Auditoria error",
+      "id": "f06e64db-c690-45f1-a2a2-706730bdef04",
+      "name": "Ejecutar triaje",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        1560,
-        620
-      ],
-      "onError": "continueRegularOutput"
-    },
-    {
-      "parameters": {
-        "respondWith": "json",
-        "responseBody": "={{ JSON.stringify({ status: 'processed', alert_id: $('Persistir alerta').item.json.id, verdict: $('Preparar guardado').item.json.verdict, severity: $('Preparar guardado').item.json.severity }) }}",
-        "options": {}
-      },
-      "id": "responder-ok",
-      "name": "Responder OK",
-      "type": "n8n-nodes-base.respondToWebhook",
-      "typeVersion": 1.1,
-      "position": [
-        2660,
-        380
-      ]
-    },
-    {
-      "parameters": {
-        "respondWith": "json",
-        "responseBody": "={{ JSON.stringify({ status: 'duplicate', alert_id: $json.id, severity: $json.severity }) }}",
-        "options": {}
-      },
-      "id": "responder-duplicada",
-      "name": "Responder duplicada",
-      "type": "n8n-nodes-base.respondToWebhook",
-      "typeVersion": 1.1,
-      "position": [
-        900,
+        720,
         120
       ]
     },
     {
       "parameters": {
         "respondWith": "json",
-        "responseBody": "={{ JSON.stringify({ status: 'discarded', reason: 'severidad inferior a media', severity: $json.severity, rule_id: $json.rule_id }) }}",
-        "options": {}
+        "responseBody": "={{ JSON.stringify({ status: 'processed', alert_id: $('Ingestar alerta').item.json.alert_id, verdict: $json.verdict, model: $json.model, fallback_used: $json.fallback_used }) }}",
+        "options": {
+          "responseCode": 202
+        }
       },
-      "id": "responder-descartada",
-      "name": "Responder descartada",
+      "id": "f06e64db-c690-45f1-a2a2-706730bdef05",
+      "name": "Responder procesada",
       "type": "n8n-nodes-base.respondToWebhook",
-      "typeVersion": 1.1,
+      "typeVersion": 1.4,
       "position": [
-        460,
-        60
+        960,
+        120
       ]
     },
     {
       "parameters": {
         "respondWith": "json",
-        "responseBody": "={{ JSON.stringify({ status: 'pending', alert_id: $('Persistir alerta').item.json.id, reason: 'triaje no disponible' }) }}",
-        "options": {}
+        "responseBody": "={{ JSON.stringify($json) }}",
+        "options": {
+          "responseCode": 202
+        }
       },
-      "id": "responder-error",
-      "name": "Responder error",
+      "id": "f06e64db-c690-45f1-a2a2-706730bdef06",
+      "name": "Responder duplicada",
       "type": "n8n-nodes-base.respondToWebhook",
-      "typeVersion": 1.1,
+      "typeVersion": 1.4,
       "position": [
-        1780,
-        620
+        720,
+        -120
       ]
     },
     {
       "parameters": {
-        "content": "## SOC-Lite · Triaje automático\n\n1. Webhook recibe Wazuh/OPNsense.\n2. Normaliza, filtra severidad < media y deduplica por fingerprint.\n3. Llama al microservicio LangChain (Ollama local).\n4. Persiste triaje, notifica sólo alta/crítica y crea ticket.\n5. Audita cada paso en la bitácora.\n\n**Credenciales**: PostgreSQL `SOC-Lite PostgreSQL` y variables de entorno `LANGCHAIN_URL`, `SLACK_WEBHOOK_URL`, `OSTICKET_URL`, `OSTICKET_TOKEN`, `SOCLITE_API_URL`, `SOCLITE_INGEST_KEY`.",
-        "height": 300,
-        "width": 420
-      },
-      "id": "sticky-1",
-      "name": "Nota de arquitectura",
-      "type": "n8n-nodes-base.stickyNote",
-      "typeVersion": 1,
-      "position": [
-        -220,
-        -140
-      ]
-    },
-    {
-      "parameters": {
-        "content": "## Rutas por severidad\n\n- **Alta/Crítica** → Slack + osTicket\n- **Media** → sólo auditoría\n- **Baja/Info** → sólo auditoría (no se persiste si < media)\n\nSi LangChain falla, la alerta vuelve a `pending` y se audita el fallo.",
+        "content": "## SOC-Lite · laboratorio de triaje\n\nEl webhook recibe eventos simulados. La API valida, deduplica, guarda y audita; luego ejecuta el triaje. Un analista revisa el resultado y decide sobre el incidente.",
         "height": 240,
-        "width": 320
+        "width": 400
       },
-      "id": "sticky-2",
-      "name": "Nota de enrutamiento",
+      "id": "f06e64db-c690-45f1-a2a2-706730bdef07",
+      "name": "Nota",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
-        1120,
-        720
+        0,
+        240
       ]
     }
   ],
@@ -599,43 +162,14 @@
       "main": [
         [
           {
-            "node": "Normalizar alerta",
+            "node": "Ingestar alerta",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Normalizar alerta": {
-      "main": [
-        [
-          {
-            "node": "Severidad minima",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Severidad minima": {
-      "main": [
-        [
-          {
-            "node": "Persistir alerta",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Responder descartada",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Persistir alerta": {
+    "Ingestar alerta": {
       "main": [
         [
           {
@@ -657,145 +191,18 @@
         ],
         [
           {
-            "node": "Triaje LangChain",
+            "node": "Ejecutar triaje",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Triaje LangChain": {
+    "Ejecutar triaje": {
       "main": [
         [
           {
-            "node": "Switch severidad",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Marcar pendiente",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Switch severidad": {
-      "main": [
-        [
-          {
-            "node": "Preparar guardado",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Preparar guardado",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Preparar guardado",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Preparar guardado": {
-      "main": [
-        [
-          {
-            "node": "Guardar triaje",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Guardar triaje": {
-      "main": [
-        [
-          {
-            "node": "Notificar",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Notificar": {
-      "main": [
-        [
-          {
-            "node": "Slack",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Auditoria",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Slack": {
-      "main": [
-        [
-          {
-            "node": "osTicket",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "osTicket": {
-      "main": [
-        [
-          {
-            "node": "Auditoria",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Auditoria": {
-      "main": [
-        [
-          {
-            "node": "Responder OK",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Marcar pendiente": {
-      "main": [
-        [
-          {
-            "node": "Auditoria error",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Auditoria error": {
-      "main": [
-        [
-          {
-            "node": "Responder error",
+            "node": "Responder procesada",
             "type": "main",
             "index": 0
           }
@@ -805,17 +212,8 @@
   },
   "active": false,
   "settings": {
-    "executionOrder": "v1",
-    "saveManualExecutions": true,
-    "callerPolicy": "workflowsFromSameOwner"
+    "executionOrder": "v1"
   },
   "pinData": {},
-  "meta": {
-    "instanceId": "soc-lite-demo"
-  },
-  "tags": [
-    {
-      "name": "soc-lite"
-    }
-  ]
+  "tags": []
 }

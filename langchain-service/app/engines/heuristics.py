@@ -1,6 +1,6 @@
 """Motor heurístico de respaldo: determinista, sin LLM y sin red.
 
-Se usa cuando Ollama no está disponible, el modelo no responde o la salida no
+Se usa cuando el proveedor LLM no está disponible, el modelo no responde o la salida no
 valida. La alerta nunca queda sin triaje y el resultado se marca `degraded`.
 """
 from __future__ import annotations

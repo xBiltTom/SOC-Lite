@@ -1,5 +1,8 @@
 # 1. Arquitectura del sistema
 
+> Nota: este documento conserva el diseño inicial. El laboratorio actual utiliza una API LLM
+> configurable y n8n delega la persistencia y el triaje al backend; consulta el README.
+
 > Caso de uso 1 — Triaje automático de alertas SOC («SOC-Lite»), nivel de impacto **crítico**.
 > Solución orientada a PYME, mediana empresa y organismo público, desplegable on-premise.
 

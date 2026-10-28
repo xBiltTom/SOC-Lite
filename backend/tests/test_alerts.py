@@ -34,6 +34,22 @@ async def test_ingesta_y_deduplicacion(client, ingest_headers, admin_token, auth
 
 
 @pytest.mark.asyncio
+async def test_automatizacion_requiere_clave_y_guarda_triaje(client, ingest_headers, admin_token, auth):
+    created = await client.post("/api/v1/alerts/ingest", json=unique_alert_payload(), headers=ingest_headers)
+    alert_id = created.json()["alert_id"]
+    path = f"/api/v1/alerts/{alert_id}/triage/automation"
+    assert (await client.post(path)).status_code == 401
+    assert (await client.post(path, headers={"X-Ingest-Key": "incorrecta"})).status_code == 401
+    result = await client.post(path, headers=ingest_headers)
+    assert result.status_code == 200, result.text
+    detail = await client.get(f"/api/v1/alerts/{alert_id}", headers=auth(admin_token))
+    assert len(detail.json()["triage_results"]) == 1
+    repeated = await client.post(path, headers=ingest_headers)
+    assert repeated.status_code == 200
+    assert repeated.json()["id"] == result.json()["id"]
+
+
+@pytest.mark.asyncio
 async def test_triaje_con_fallback_heuristica(client, ingest_headers, admin_token, auth):
     payload = unique_alert_payload()
     payload["rule"]["description"] = f"Ransomware de prueba {uuid.uuid4().hex[:6]}"

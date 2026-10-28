@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from 'react'
 import { CheckCircle2, Info, X, XCircle } from 'lucide-react'
+import { Link } from 'react-router-dom'
 
 type ToastKind = 'success' | 'error' | 'info'
 
@@ -7,10 +8,11 @@ interface ToastItem {
   id: number
   kind: ToastKind
   message: string
+  href?: string
 }
 
 interface ToastContextValue {
-  push: (message: string, kind?: ToastKind) => void
+  push: (message: string, kind?: ToastKind, href?: string) => void
 }
 
 const ToastContext = createContext<ToastContextValue | null>(null)
@@ -30,9 +32,9 @@ const STYLES = {
 export function ToastProvider({ children }: { children: ReactNode }) {
   const [items, setItems] = useState<ToastItem[]>([])
 
-  const push = useCallback((message: string, kind: ToastKind = 'info') => {
+  const push = useCallback((message: string, kind: ToastKind = 'info', href?: string) => {
     const id = Date.now() + Math.random()
-    setItems((current) => [...current, { id, kind, message }])
+    setItems((current) => [...current, { id, kind, message, href }])
     window.setTimeout(() => {
       setItems((current) => current.filter((item) => item.id !== id))
     }, 4500)
@@ -53,7 +55,10 @@ export function ToastProvider({ children }: { children: ReactNode }) {
               role="status"
             >
               <Icon size={18} className="mt-0.5 shrink-0" />
-              <p className="flex-1 leading-snug">{item.message}</p>
+              <div className="flex-1 leading-snug">
+                <p>{item.message}</p>
+                {item.href && <Link to={item.href} className="mt-1 inline-block underline" onClick={() => setItems((current) => current.filter((entry) => entry.id !== item.id))}>Ver alerta</Link>}
+              </div>
               <button
                 onClick={() => setItems((current) => current.filter((entry) => entry.id !== item.id))}
                 className="p-0.5 opacity-60 hover:opacity-100"

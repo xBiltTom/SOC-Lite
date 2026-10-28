@@ -38,6 +38,7 @@ from app.schemas.alert import (
 )
 from app.schemas.common import Page
 from app.services import alert_ingest, audit, triage_client
+from app.services.live_events import live_events
 
 router = APIRouter(prefix="/alerts", tags=["Alertas"])
 
@@ -122,6 +123,11 @@ async def ingest(
         },
     )
     await db.commit()
+    await live_events.publish({
+        "type": "alert.created", "alert_id": str(alert.id),
+        "severity": alert.severity.value, "description": alert.description,
+        "simulated": bool(alert.raw_payload.get("demo")),
+    })
     return IngestResponse(
         status="accepted", alert_id=alert.id, severity=alert.severity,
         message="Alerta registrada en estado pendiente",
@@ -317,7 +323,8 @@ async def run_triage(
         alert.severity = output.severity
 
     await audit.record(
-        db, module="triage", action="TRIAGE_RUN", user=actor, request=request,
+        db, module="triage", action="TRIAGE_RUN", user=actor,
+        username="n8n" if actor is None else None, request=request,
         entity_type="alert", entity_id=alert.id,
         detail={
             "verdict": output.verdict.value,
@@ -330,7 +337,20 @@ async def run_triage(
     )
     await db.commit()
     await db.refresh(result)
+    await live_events.publish({"type": "alert.triaged", "alert_id": str(alert.id)})
     return TriageOut.model_validate(result)
+
+
+@router.post("/{alert_id}/triage/automation", response_model=TriageOut, summary="Triaje desde automatización")
+async def automation_triage(
+    alert_id: uuid.UUID,
+    request: Request,
+    db: DbSession,
+    x_ingest_key: Annotated[str | None, Header(alias="X-Ingest-Key")] = None,
+) -> TriageOut:
+    if not x_ingest_key or not secrets.compare_digest(x_ingest_key, settings.ingest_api_key):
+        raise Unauthorized("Clave de ingesta inválida")
+    return await run_triage(alert_id, request, db, actor=None, force=False)
 
 
 @router.post("/{alert_id}/feedback", response_model=FeedbackOut, summary="Registrar validación humana")

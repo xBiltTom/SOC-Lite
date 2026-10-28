@@ -28,6 +28,7 @@ services:
       SECRET_KEY: ${SECRET_KEY:?Defina SECRET_KEY en .env}
       INGEST_API_KEY: ${INGEST_API_KEY:-dev-ingest-key-change-me}
       TRIAGE_SERVICE_URL: http://triage:8001
+      TRIAGE_TIMEOUT_SECONDS: ${TRIAGE_TIMEOUT_SECONDS:-75}
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:8090}
       ENVIRONMENT: ${ENVIRONMENT:-production}
       REPORTS_DIR: storage/reports
@@ -52,9 +53,11 @@ services:
     build: ./langchain-service
     container_name: soclite-triage
     environment:
-      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://ollama:11434}
-      OLLAMA_MODEL: ${OLLAMA_MODEL:-llama3.1:8b}
+      LLM_BASE_URL: ${LLM_BASE_URL:-https://api.groq.com/openai/v1}
+      LLM_MODEL: ${LLM_MODEL:-llama-3.3-70b-versatile}
+      LLM_API_KEY: ${LLM_API_KEY:-}
       LLM_ENABLED: ${LLM_ENABLED:-true}
+      LLM_TIMEOUT_SECONDS: ${LLM_TIMEOUT_SECONDS:-45}
       VIRUSTOTAL_API_KEY: ${VIRUSTOTAL_API_KEY:-}
       ABUSEIPDB_API_KEY: ${ABUSEIPDB_API_KEY:-}
       GEOIP_ENABLED: ${GEOIP_ENABLED:-true}
@@ -69,6 +72,17 @@ services:
     depends_on:
       - backend
 
+  simulator:
+    build: ./simulator
+    container_name: soclite-simulator
+    profiles: ["simulation"]
+    environment:
+      SIMULATOR_WEBHOOK_URL: http://n8n:5678/webhook/soc-lite-ingest
+      SIMULATOR_INTERVAL_SECONDS: ${SIMULATOR_INTERVAL_SECONDS:-30}
+      SIMULATOR_SCENARIOS: ${SIMULATOR_SCENARIOS:-ssh,ransomware,benign}
+    depends_on:
+      - n8n
+
   n8n:
     image: n8nio/n8n:latest
     container_name: soclite-n8n
@@ -78,6 +92,7 @@ services:
       N8N_PROTOCOL: http
       N8N_SECURE_COOKIE: "false"
       N8N_DIAGNOSTICS_ENABLED: "false"
+      N8N_BLOCK_ENV_ACCESS_IN_NODE: "false"
       GENERIC_TIMEZONE: ${GENERIC_TIMEZONE:-America/Lima}
       SOCLITE_API_URL: http://backend:8000
       SOCLITE_INGEST_KEY: ${INGEST_API_KEY:-dev-ingest-key-change-me}
@@ -93,17 +108,7 @@ services:
     depends_on:
       - backend
 
-  ollama:
-    image: ollama/ollama:latest
-    container_name: soclite-ollama
-    profiles: ["llm"]
-    ports:
-      - "127.0.0.1:11435:11434"
-    volumes:
-      - ollama_data:/root/.ollama
-
 volumes:
   pgdata:
   reports:
   n8n_data:
-  ollama_data:

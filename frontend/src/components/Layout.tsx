@@ -19,6 +19,7 @@ import clsx from 'clsx'
 import { useAuth } from '../context/AuthContext'
 import { initials } from '../lib/format'
 import ThemeToggle from './ThemeToggle'
+import LiveNotifications from './LiveNotifications'
 
 interface NavItem {
   to: string
@@ -244,6 +245,7 @@ export default function Layout() {
           </div>
 
           <div className="flex items-center gap-3">
+            <LiveNotifications />
             <ThemeToggle />
             <Clock />
             <div ref={userMenuRef} className="relative">

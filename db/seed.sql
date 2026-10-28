@@ -110,7 +110,7 @@ INSERT INTO integrations (name, type, config, enabled, last_check_at) VALUES
  ('AbuseIPDB',       'threat_intel','{"api_key_env":"ABUSEIPDB_API_KEY","quota":"free"}',  true,  now() - interval '1 hour'),
  ('osTicket',        'ticketing',   '{"endpoint":"https://osticket.local/api","queue":"SOC"}', true, now() - interval '12 minutes'),
  ('Slack',           'chat',        '{"channel":"#soc-alertas","webhook_env":"SLACK_WEBHOOK_URL"}', true, now() - interval '1 minute'),
- ('Ollama (local)',  'llm',         '{"endpoint":"http://ollama:11434","model":"llama3.1:8b"}', true, now() - interval '5 minutes');
+ ('LLM compatible con OpenAI', 'llm', '{"config":"LLM_BASE_URL y LLM_MODEL"}', false, NULL);
 
 -- ---------------------------------------------------------------------
 -- 6. ALERTAS CURADAS (historias de demostración)
