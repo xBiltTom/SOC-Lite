@@ -1,4 +1,4 @@
-.PHONY: help up down logs ps seed schema test test-backend lint build smoke clean n8n-import demo-ssh simulator-start simulator-stop
+.PHONY: help up down logs ps seed schema test test-backend lint build smoke clean n8n-import demo-ssh simulator-start simulator-stop migrate-analyst
 
 help:
 	@echo "SOC-Lite · comandos"
@@ -13,6 +13,7 @@ help:
 	@echo "  make n8n-import Importa el workflow en n8n (crear antes la cuenta)"
 	@echo "  make demo-ssh  Envía una alerta SSH simulada por n8n"
 	@echo "  make simulator-start / simulator-stop  Inicia / detiene el simulador"
+	@echo "  make migrate-analyst  Permite al rol analista cerrar incidentes existentes"
 	@echo "  make clean     Elimina artefactos locales (no volúmenes)"
 
 up:
@@ -52,6 +53,9 @@ simulator-start:
 
 simulator-stop:
 	docker compose --profile simulation stop simulator
+
+migrate-analyst:
+	docker compose exec -T db sh -c 'psql -U "$$POSTGRES_USER" -d "$$POSTGRES_DB" -v ON_ERROR_STOP=1' < db/migrations/001_analyst_incident_close.sql
 
 clean:
 	rm -rf frontend/dist backend/storage/reports/*.pdf backend/storage/reports/*.docx backend/storage/reports/*.xlsx

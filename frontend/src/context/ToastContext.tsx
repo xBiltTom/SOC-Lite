@@ -57,7 +57,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
               <Icon size={18} className="mt-0.5 shrink-0" />
               <div className="flex-1 leading-snug">
                 <p>{item.message}</p>
-                {item.href && <Link to={item.href} className="mt-1 inline-block underline" onClick={() => setItems((current) => current.filter((entry) => entry.id !== item.id))}>Ver alerta</Link>}
+                {item.href && <Link to={item.href} className="mt-1 inline-block underline" onClick={() => setItems((current) => current.filter((entry) => entry.id !== item.id))}>Ver detalle</Link>}
               </div>
               <button
                 onClick={() => setItems((current) => current.filter((entry) => entry.id !== item.id))}

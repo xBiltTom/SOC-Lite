@@ -85,8 +85,8 @@ export const alertsApi = {
     api
       .post(`/alerts/${id}/feedback`, { is_false_positive: isFalsePositive, comment })
       .then((r) => r.data),
-  createIncident: (id: string, priority?: string) =>
-    api.post<Incident>(`/alerts/${id}/incident`, { priority }).then((r) => r.data),
+  createIncident: (id: string, payload: { title?: string; priority?: string }) =>
+    api.post<Incident>(`/alerts/${id}/incident`, payload).then((r) => r.data),
   update: (id: string, payload: { status?: string; tags?: string[]; asset_criticality?: number }) =>
     api.patch<AlertDetail>(`/alerts/${id}`, payload).then((r) => r.data),
 }
@@ -95,6 +95,8 @@ export const alertsApi = {
 // Incidentes
 // ---------------------------------------------------------------------------
 export const incidentsApi = {
+  get: (id: string) => api.get<Incident>(`/incidents/${id}`).then((r) => r.data),
+  assignees: () => api.get<{ id: string; username: string; full_name: string }[]>('/incidents/assignees').then((r) => r.data),
   list: (params: {
     page?: number
     size?: number

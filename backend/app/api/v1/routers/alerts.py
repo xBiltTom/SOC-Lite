@@ -26,6 +26,7 @@ from app.models.enums import (
     TriageVerdict,
 )
 from app.models.incident import Incident
+from app.models.security import User
 from app.schemas.alert import (
     AlertDetail,
     AlertListItem,
@@ -425,6 +426,8 @@ async def feedback(
 
     if payload.is_false_positive:
         alert.status = AlertStatus.FALSE_POSITIVE
+    elif alert.status == AlertStatus.FALSE_POSITIVE:
+        alert.status = AlertStatus.IN_REVIEW
     await audit.record(
         db, module="alerts", action="TRIAGE_FEEDBACK", user=actor, request=request,
         entity_type="alert", entity_id=alert.id,
@@ -453,17 +456,25 @@ async def create_incident(
     db: DbSession,
     actor: Annotated[Any, Depends(require_permission(P.INCIDENTS_CREATE))],
 ) -> IncidentOut:
+    locked = (await db.execute(select(Alert.id).where(Alert.id == alert_id).with_for_update())).scalar_one_or_none()
+    if locked is None:
+        raise NotFound("Alerta")
     alert = await _get_alert(db, alert_id)
     if alert.status in (AlertStatus.TRIAGING, AlertStatus.TRIAGE_FAILED):
         raise Conflict("Espere o reintente el triaje antes de crear el incidente")
     if alert.incident is not None:
         raise Conflict("La alerta ya tiene un incidente asociado")
 
+    if payload.assignee_id is not None:
+        assignee = (await db.execute(select(User).where(User.id == payload.assignee_id, User.is_active.is_(True), User.deleted_at.is_(None)))).scalar_one_or_none()
+        if assignee is None or not assignee.has_permission(P.INCIDENTS_UPDATE):
+            raise AppError("El responsable debe ser un usuario activo con permiso para gestionar incidentes", 422, "INVALID_ASSIGNEE")
+
     priority = payload.priority or _default_priority(alert.severity)
     sla_hours = {"P1": 4, "P2": 8, "P3": 24, "P4": 72}[priority.value]
     incident = Incident(
         alert_id=alert.id,
-        ticket_id=f"OSK-{int(datetime.now(timezone.utc).timestamp()) % 1_000_000:06d}",
+        ticket_id=f"INC-{uuid.uuid4().hex[:12].upper()}",
         title=payload.title or f"Incidente: {alert.description[:90]}",
         description=payload.description or alert.description,
         status=IncidentStatus.OPEN,

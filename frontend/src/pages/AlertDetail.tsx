@@ -32,7 +32,7 @@ import {
   truncate,
   VERDICT_LABELS,
 } from '../lib/format'
-import type { AlertStatus } from '../types'
+import type { AlertStatus, IncidentPriority } from '../types'
 
 const STATUSES: AlertStatus[] = [
   'pending',
@@ -53,6 +53,9 @@ export default function AlertDetailPage() {
   const [feedbackOpen, setFeedbackOpen] = useState(false)
   const [feedbackFp, setFeedbackFp] = useState(true)
   const [comment, setComment] = useState('')
+  const [incidentOpen, setIncidentOpen] = useState(false)
+  const [incidentTitle, setIncidentTitle] = useState('')
+  const [incidentPriority, setIncidentPriority] = useState<IncidentPriority>('P3')
 
   const query = useQuery({
     queryKey: ['alert', id],
@@ -90,10 +93,12 @@ export default function AlertDetailPage() {
   })
 
   const incident = useMutation({
-    mutationFn: () => alertsApi.createIncident(id),
+    mutationFn: () => alertsApi.createIncident(id, { title: incidentTitle.trim() || undefined, priority: incidentPriority }),
     onSuccess: (created) => {
-      push(`Incidente ${created.ticket_id ?? ''} creado`, 'success')
+      push(`Incidente local ${created.ticket_id ?? ''} creado`, 'success', hasPermission('incidents:read') ? `/incidents?incident=${created.id}` : undefined)
+      setIncidentOpen(false)
       invalidate()
+      void queryClient.invalidateQueries({ queryKey: ['incidents'] })
     },
     onError: (error) => push(apiErrorMessage(error), 'error'),
   })
@@ -359,11 +364,15 @@ export default function AlertDetailPage() {
               {hasPermission('incidents:create') && !alert.incident && (
                 <button
                   className="btn-secondary w-full justify-start"
-                  onClick={() => incident.mutate()}
+                  onClick={() => {
+                    setIncidentTitle(`Incidente: ${alert.description}`.slice(0, 200))
+                    setIncidentPriority(({ critical: 'P1', high: 'P2', medium: 'P3', low: 'P4', info: 'P4' } as const)[alert.severity])
+                    setIncidentOpen(true)
+                  }}
                   disabled={busy || triageBlocked}
                 >
                   {incident.isPending ? <Loader2 size={15} className="animate-spin" /> : <Siren size={15} className="text-rose-400" />}
-                  Crear incidente y ticket
+                  Crear incidente
                 </button>
               )}
 
@@ -460,11 +469,11 @@ export default function AlertDetailPage() {
                 <h2 className="flex items-center gap-2 text-sm font-semibold text-ink">
                   <Siren size={15} className="text-rose-400" /> Incidente vinculado
                 </h2>
-                <Link to="/incidents" className="text-slate-500 hover:text-accent">
+                <Link to={`/incidents?incident=${alert.incident.id}`} className="text-slate-500 hover:text-accent" aria-label="Abrir incidente vinculado">
                   <ExternalLink size={14} />
                 </Link>
               </div>
-              <p className="font-mono text-xs text-accent">{alert.incident.ticket_id ?? 'sin ticket'}</p>
+              <p className="font-mono text-xs text-accent">ID local: {alert.incident.ticket_id ?? '—'}</p>
               <p className="mt-1 text-sm text-slate-200">{alert.incident.title}</p>
               <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
                 <div>
@@ -488,6 +497,34 @@ export default function AlertDetailPage() {
           )}
         </div>
       </div>
+
+      <Modal
+        open={incidentOpen}
+        onClose={() => setIncidentOpen(false)}
+        title="Crear incidente"
+        description="Se creará un caso local vinculado a esta alerta."
+        footer={<>
+          <button className="btn-secondary" onClick={() => setIncidentOpen(false)}>Cancelar</button>
+          <button className="btn-primary" onClick={() => incident.mutate()} disabled={incident.isPending || !incidentTitle.trim()}>
+            {incident.isPending ? <Loader2 size={15} className="animate-spin" /> : <Siren size={15} />}
+            Crear incidente
+          </button>
+        </>}
+      >
+        <div className="space-y-4">
+          <div>
+            <label className="label" htmlFor="incident-title">Título</label>
+            <input id="incident-title" className="input" value={incidentTitle} onChange={(event) => setIncidentTitle(event.target.value)} maxLength={200} />
+          </div>
+          <div>
+            <label className="label" htmlFor="incident-priority">Prioridad inicial</label>
+            <select id="incident-priority" className="input" value={incidentPriority} onChange={(event) => setIncidentPriority(event.target.value as IncidentPriority)}>
+              {(['P1', 'P2', 'P3', 'P4'] as const).map((priority) => <option key={priority} value={priority}>{priority}</option>)}
+            </select>
+            <p className="mt-2 text-xs text-slate-500">Se asignará a tu usuario; podrás cambiar el responsable después.</p>
+          </div>
+        </div>
+      </Modal>
 
       <Modal
         open={feedbackOpen}

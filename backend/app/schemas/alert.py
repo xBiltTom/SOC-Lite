@@ -64,6 +64,7 @@ class IncidentBrief(ORMModel):
     status: IncidentStatus
     priority: IncidentPriority
     assignee_id: UUID | None = None
+    assignee_name: str | None = None
     sla_due_at: datetime | None = None
     opened_at: datetime
 
@@ -140,6 +141,12 @@ class IncidentCreate(BaseModel):
     priority: IncidentPriority | None = None
     assignee_id: UUID | None = None
     description: str | None = Field(default=None, max_length=4000)
+
+
+class IncidentAssignee(ORMModel):
+    id: UUID
+    username: str
+    full_name: str
 
 
 class IncidentOut(ORMModel):

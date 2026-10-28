@@ -220,7 +220,7 @@ async def test_feedback_e_incidente(client, ingest_headers, admin_token, auth):
         f"/api/v1/alerts/{alert_id}/incident", json={"priority": "P2"}, headers=headers
     )
     assert incident.status_code == 201, incident.text
-    assert incident.json()["ticket_id"].startswith("OSK-")
+    assert incident.json()["ticket_id"].startswith("INC-")
 
 
 @pytest.mark.asyncio

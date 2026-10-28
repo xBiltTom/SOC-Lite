@@ -72,7 +72,7 @@ INSERT INTO role_permissions (role_id, permission_id)
 SELECT r.id, p.id FROM roles r JOIN permissions p ON p.code = ANY (ARRAY[
  'dashboard:read','alerts:read','alerts:create','alerts:update','alerts:export',
  'triage:read','triage:run','triage:feedback',
- 'incidents:read','incidents:create','incidents:update',
+ 'incidents:read','incidents:create','incidents:update','incidents:close',
  'reports:read','reports:create'])
 WHERE r.code = 'analyst';
 

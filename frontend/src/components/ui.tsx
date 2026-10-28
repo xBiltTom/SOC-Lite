@@ -1,4 +1,5 @@
-import { useEffect, type ReactNode } from 'react'
+import { useEffect, useId, useRef, type ReactNode } from 'react'
+import { createPortal } from 'react-dom'
 import { ChevronLeft, ChevronRight, Inbox, Loader2, X, type LucideIcon } from 'lucide-react'
 import clsx from 'clsx'
 import { formatNumber } from '../lib/format'
@@ -176,39 +177,55 @@ export function Modal({
   footer?: ReactNode
   width?: string
 }) {
+  const titleId = useId()
+  const dialogRef = useRef<HTMLDivElement>(null)
+  const onCloseRef = useRef(onClose)
+  onCloseRef.current = onClose
   useEffect(() => {
     if (!open) return
+    const previousFocus = document.activeElement as HTMLElement | null
+    const controls = () => dialogRef.current?.querySelectorAll<HTMLElement>('button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), a[href]')
+    controls()?.[0]?.focus()
     const handler = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose()
+      if (event.key === 'Escape') onCloseRef.current()
+      if (event.key !== 'Tab') return
+      const items = controls()
+      if (!items?.length) return
+      const first = items[0]
+      const last = items[items.length - 1]
+      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus() }
+      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus() }
     }
     document.addEventListener('keydown', handler)
     document.body.style.overflow = 'hidden'
     return () => {
       document.removeEventListener('keydown', handler)
       document.body.style.overflow = ''
+      previousFocus?.focus()
     }
-  }, [open, onClose])
+  }, [open])
 
   if (!open) return null
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+  return createPortal(
+    <div ref={dialogRef} className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-labelledby={titleId}>
       <div className="absolute inset-0 bg-base-950/80 backdrop-blur-sm" onClick={onClose} />
-      <div className={clsx('card relative z-10 w-full animate-fade-up', width)}>
+      <div className={clsx('card relative z-10 flex max-h-[calc(100dvh-2rem)] w-full flex-col animate-fade-up', width)}>
         <div className="flex items-start justify-between gap-4 border-b border-base-700 px-5 py-4">
           <div>
-            <h2 className="text-base font-semibold text-ink">{title}</h2>
+            <h2 id={titleId} className="text-base font-semibold text-ink">{title}</h2>
             {description && <p className="mt-0.5 text-xs text-slate-500">{description}</p>}
           </div>
           <button onClick={onClose} className="btn-ghost h-8 w-8 !p-0" aria-label="Cerrar">
             <X size={16} />
           </button>
         </div>
-        <div className="max-h-[70vh] overflow-y-auto px-5 py-4">{children}</div>
+        <div className="min-h-0 overflow-y-auto px-5 py-4">{children}</div>
         {footer && (
           <div className="flex justify-end gap-2 border-t border-base-700 px-5 py-4">{footer}</div>
         )}
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }
 

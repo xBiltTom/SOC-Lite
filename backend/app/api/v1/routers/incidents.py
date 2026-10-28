@@ -10,18 +10,33 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.orm import selectinload
 
 from app.core.deps import DbSession, PaginationDep, require_permission
-from app.core.errors import Forbidden, NotFound
+from app.core.errors import AppError, Forbidden, NotFound
 from app.core.permissions import P
 from app.models.alert import Alert
 from app.models.enums import IncidentStatus
 from app.models.incident import Incident
-from app.schemas.alert import IncidentOut, IncidentUpdate
+from app.models.security import Permission, Role, User
+from app.schemas.alert import IncidentAssignee, IncidentOut, IncidentUpdate
 from app.schemas.common import Page
 from app.services import audit
 
 router = APIRouter(prefix="/incidents", tags=["Incidentes"])
 
 ReadIncidents = Annotated[Any, Depends(require_permission(P.INCIDENTS_READ))]
+
+
+@router.get("/assignees", response_model=list[IncidentAssignee], summary="Responsables disponibles")
+async def list_assignees(
+    db: DbSession,
+    _: Annotated[Any, Depends(require_permission(P.INCIDENTS_CREATE, P.INCIDENTS_UPDATE))],
+) -> list[IncidentAssignee]:
+    users = (await db.execute(
+        select(User).where(
+            User.is_active.is_(True), User.deleted_at.is_(None),
+            User.role.has(Role.permissions.any(Permission.code == P.INCIDENTS_UPDATE)),
+        ).order_by(User.full_name)
+    )).scalars().all()
+    return [IncidentAssignee.model_validate(user) for user in users]
 
 
 @router.get("", response_model=Page[IncidentOut], summary="Listar incidentes")
@@ -97,6 +112,16 @@ async def update_incident(
     if incident is None:
         raise NotFound("Incidente")
 
+    if not actor.has_permission(P.INCIDENTS_UPDATE):
+        if (payload.priority is not None or payload.assignee_id is not None
+                or payload.status not in (IncidentStatus.CLOSED, IncidentStatus.RESOLVED)):
+            raise Forbidden("Se requiere incidents:update para editar el incidente")
+
+    final_status = payload.status or incident.status
+    final_resolution = payload.resolution if payload.resolution is not None else incident.resolution
+    if final_status in (IncidentStatus.CLOSED, IncidentStatus.RESOLVED) and not (final_resolution or "").strip():
+        raise AppError("La resolución es obligatoria para resolver o cerrar el incidente", 422, "RESOLUTION_REQUIRED")
+
     changes: dict[str, Any] = {}
     if payload.status is not None and payload.status != incident.status:
         if payload.status in (IncidentStatus.CLOSED, IncidentStatus.RESOLVED) and not actor.has_permission(
@@ -113,8 +138,14 @@ async def update_incident(
         changes["priority"] = {"from": incident.priority.value, "to": payload.priority.value}
         incident.priority = payload.priority
     if payload.assignee_id is not None:
-        changes["assignee_id"] = str(payload.assignee_id)
+        assignee = (await db.execute(select(User).where(
+            User.id == payload.assignee_id, User.is_active.is_(True), User.deleted_at.is_(None)
+        ))).scalar_one_or_none()
+        if assignee is None or not assignee.has_permission(P.INCIDENTS_UPDATE):
+            raise AppError("El responsable debe ser un usuario activo con permiso para gestionar incidentes", 422, "INVALID_ASSIGNEE")
+        changes["assignee_id"] = {"from": str(incident.assignee_id) if incident.assignee_id else None, "to": str(payload.assignee_id)}
         incident.assignee_id = payload.assignee_id
+        incident.assignee = assignee
     if payload.resolution is not None:
         changes["resolution"] = payload.resolution
         incident.resolution = payload.resolution

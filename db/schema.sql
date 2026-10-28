@@ -213,7 +213,7 @@ CREATE INDEX idx_feedback_alert ON alert_feedback(alert_id);
 CREATE TABLE incidents (
     id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     alert_id    uuid REFERENCES alerts(id) ON DELETE SET NULL,
-    ticket_id   text UNIQUE,                      -- osTicket / Redmine / Jira
+    ticket_id   text UNIQUE,                      -- identificador local del incidente
     title       text NOT NULL,
     description text,
     status      incident_status NOT NULL DEFAULT 'open',

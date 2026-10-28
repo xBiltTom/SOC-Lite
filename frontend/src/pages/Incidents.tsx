@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { CheckCircle2, Loader2, Pencil, Search, Siren } from 'lucide-react'
 import { incidentsApi } from '../api'
@@ -10,7 +10,6 @@ import { useAuth } from '../context/AuthContext'
 import { useToast } from '../context/ToastContext'
 import {
   formatDate,
-  INCIDENT_PRIORITY_STYLES,
   INCIDENT_STATUS_LABELS,
   truncate,
 } from '../lib/format'
@@ -23,16 +22,21 @@ export default function IncidentsPage() {
   const { hasPermission } = useAuth()
   const { push } = useToast()
   const queryClient = useQueryClient()
+  const [searchParams, setSearchParams] = useSearchParams()
+  const requestedId = searchParams.get('incident')
+  const canUpdate = hasPermission('incidents:update')
+  const canClose = hasPermission('incidents:close')
   const [page, setPage] = useState(1)
   const [status, setStatus] = useState('')
   const [priority, setPriority] = useState('')
   const [search, setSearch] = useState('')
   const [debounced, setDebounced] = useState('')
   const [selected, setSelected] = useState<Incident | null>(null)
-  const [form, setForm] = useState<{ status: IncidentStatus; priority: IncidentPriority; resolution: string }>({
+  const [form, setForm] = useState<{ status: IncidentStatus; priority: IncidentPriority; resolution: string; assignee_id: string }>({
     status: 'open',
     priority: 'P3',
     resolution: '',
+    assignee_id: '',
   })
 
   useEffect(() => {
@@ -55,28 +59,57 @@ export default function IncidentsPage() {
     placeholderData: (previous) => previous,
   })
 
+  const requested = useQuery({
+    queryKey: ['incident', requestedId],
+    queryFn: () => incidentsApi.get(requestedId!),
+    enabled: Boolean(requestedId),
+    retry: false,
+  })
+  const assignees = useQuery({
+    queryKey: ['incident-assignees'],
+    queryFn: incidentsApi.assignees,
+    enabled: Boolean(selected) && canUpdate,
+  })
+
+  useEffect(() => {
+    if (!requested.data || selected?.id === requested.data.id) return
+    const incident = requested.data
+    setSelected(incident)
+    setForm({ status: incident.status, priority: incident.priority, resolution: incident.resolution ?? '', assignee_id: incident.assignee_id ?? '' })
+  }, [requested.data, selected?.id])
+
+  const closeEdit = () => {
+    setSelected(null)
+    setSearchParams((current) => { const next = new URLSearchParams(current); next.delete('incident'); return next })
+  }
+
   const update = useMutation({
     mutationFn: () =>
       incidentsApi.update(selected!.id, {
-        status: form.status,
-        priority: form.priority,
-        resolution: form.resolution || undefined,
+        status: form.status !== selected!.status || !canUpdate ? form.status : undefined,
+        priority: form.priority !== selected!.priority ? form.priority : undefined,
+        assignee_id: form.assignee_id && form.assignee_id !== selected!.assignee_id ? form.assignee_id : undefined,
+        resolution: form.resolution !== (selected!.resolution ?? '') ? form.resolution : undefined,
       }),
     onSuccess: () => {
       push('Incidente actualizado', 'success')
-      setSelected(null)
+      closeEdit()
       void queryClient.invalidateQueries({ queryKey: ['incidents'] })
       void queryClient.invalidateQueries({ queryKey: ['dashboard'] })
+      void queryClient.invalidateQueries({ queryKey: ['alert'] })
+      void queryClient.invalidateQueries({ queryKey: ['incident'] })
     },
     onError: (error) => push(apiErrorMessage(error), 'error'),
   })
 
   const openEdit = (incident: Incident) => {
     setSelected(incident)
+    setSearchParams((current) => { const next = new URLSearchParams(current); next.set('incident', incident.id); return next })
     setForm({
       status: incident.status,
       priority: incident.priority,
       resolution: incident.resolution ?? '',
+      assignee_id: incident.assignee_id ?? '',
     })
   }
 
@@ -84,7 +117,7 @@ export default function IncidentsPage() {
     <div className="animate-fade-up">
       <PageHeader
         title="Incidentes"
-        subtitle="Casos escalados desde el triaje, con prioridad, responsable y vencimiento de SLA."
+        subtitle="Casos locales vinculados a alertas, con prioridad, responsable y vencimiento de SLA. No se crean tickets externos."
       />
 
       <div className="card mb-4 flex flex-col gap-3 p-4 sm:flex-row sm:items-center">
@@ -108,7 +141,7 @@ export default function IncidentsPage() {
           <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
           <input
             className="input pl-9"
-            placeholder="Buscar por ticket o título…"
+            placeholder="Buscar por ID local o título…"
             value={search}
             onChange={(event) => setSearch(event.target.value)}
           />
@@ -116,6 +149,7 @@ export default function IncidentsPage() {
       </div>
 
       {query.isError && <ErrorBanner message={apiErrorMessage(query.error)} />}
+      {requested.isError && <ErrorBanner message={apiErrorMessage(requested.error)} />}
 
       <div className="card overflow-hidden">
         {query.isLoading ? (
@@ -128,7 +162,7 @@ export default function IncidentsPage() {
               <table className="table min-w-[1020px]">
                 <thead>
                   <tr>
-                    <th>Ticket</th>
+                    <th>ID local</th>
                     <th>Incidente</th>
                     <th>Severidad</th>
                     <th>Prioridad</th>
@@ -175,11 +209,11 @@ export default function IncidentsPage() {
                         </td>
                         <td className="whitespace-nowrap text-xs text-slate-500">{formatDate(incident.opened_at)}</td>
                         <td>
-                          {hasPermission('incidents:update') && (
+                          {hasPermission('incidents:read') && (
                             <button
                               onClick={() => openEdit(incident)}
                               className="p-1.5 text-slate-500 hover:bg-ink/5 hover:text-accent"
-                              aria-label="Editar incidente"
+                              aria-label="Abrir incidente"
                             >
                               <Pencil size={14} />
                             </button>
@@ -203,18 +237,18 @@ export default function IncidentsPage() {
 
       <Modal
         open={Boolean(selected)}
-        onClose={() => setSelected(null)}
+        onClose={closeEdit}
         title={`Incidente ${selected?.ticket_id ?? ''}`}
         description={selected ? truncate(selected.title, 90) : ''}
         footer={
           <>
-            <button className="btn-secondary" onClick={() => setSelected(null)}>
-              Cancelar
+            <button className="btn-secondary" onClick={closeEdit}>
+              Cerrar
             </button>
-            <button className="btn-primary" onClick={() => update.mutate()} disabled={update.isPending}>
+            {(canUpdate || canClose) && <button className="btn-primary" onClick={() => update.mutate()} disabled={update.isPending || (['resolved', 'closed'].includes(form.status) && !form.resolution.trim())}>
               {update.isPending ? <Loader2 size={15} className="animate-spin" /> : <CheckCircle2 size={15} />}
               Guardar cambios
-            </button>
+            </button>}
           </>
         }
       >
@@ -222,25 +256,29 @@ export default function IncidentsPage() {
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="label">Estado</label>
+                <label className="label" htmlFor="incident-status">Estado</label>
                 <select
+                  id="incident-status"
                   className="input"
                   value={form.status}
                   onChange={(event) => setForm({ ...form, status: event.target.value as IncidentStatus })}
+                  disabled={!canUpdate && !canClose}
                 >
                   {STATUSES.map((value) => (
-                    <option key={value} value={value}>
+                    <option key={value} value={value} disabled={value !== selected.status && (['resolved', 'closed'].includes(value) ? !canClose : !canUpdate)}>
                       {INCIDENT_STATUS_LABELS[value]}
                     </option>
                   ))}
                 </select>
               </div>
               <div>
-                <label className="label">Prioridad</label>
+                <label className="label" htmlFor="incident-edit-priority">Prioridad</label>
                 <select
+                  id="incident-edit-priority"
                   className="input"
                   value={form.priority}
                   onChange={(event) => setForm({ ...form, priority: event.target.value as IncidentPriority })}
+                  disabled={!canUpdate}
                 >
                   {PRIORITIES.map((value) => (
                     <option key={value} value={value}>
@@ -250,30 +288,37 @@ export default function IncidentsPage() {
                 </select>
               </div>
             </div>
+            <div>
+              <label className="label" htmlFor="incident-assignee">Responsable</label>
+              <select id="incident-assignee" className="input" value={form.assignee_id} disabled={!canUpdate || assignees.isLoading || assignees.isError} onChange={(event) => setForm({ ...form, assignee_id: event.target.value })}>
+                {!form.assignee_id && <option value="" disabled>Selecciona un responsable</option>}
+                {form.assignee_id && !assignees.data?.some((user) => user.id === form.assignee_id) && <option value={form.assignee_id}>{selected.assignee_name ?? 'Responsable actual'}</option>}
+                {assignees.data?.map((user) => <option key={user.id} value={user.id}>{user.full_name} ({user.username})</option>)}
+              </select>
+              {assignees.isError && <p className="mt-1 text-xs text-rose-400">No se pudieron cargar los responsables.</p>}
+            </div>
             <div className="border border-base-700 bg-ink/[0.02] p-3 text-xs text-slate-400">
               <p>
                 <span className="text-slate-500">Alerta origen:</span> {selected.alert_description ?? '—'}
               </p>
+              {selected.alert_id && hasPermission('alerts:read') && <Link to={`/alerts/${selected.alert_id}`} className="mt-1 inline-block text-accent underline">Abrir alerta</Link>}
               <p className="mt-1">
                 <span className="text-slate-500">Apertura:</span> {formatDate(selected.opened_at)} ·{' '}
                 <span className="text-slate-500">SLA:</span> {formatDate(selected.sla_due_at)}
               </p>
             </div>
             <div>
-              <label className="label">Resolución / notas</label>
+              <label className="label" htmlFor="incident-resolution">Resolución / notas{['resolved', 'closed'].includes(form.status) ? ' (obligatoria)' : ''}</label>
               <textarea
+                id="incident-resolution"
                 className="input min-h-[110px]"
                 value={form.resolution}
                 onChange={(event) => setForm({ ...form, resolution: event.target.value })}
-                placeholder="Contención aplicada, evidencia recolectada, lecciones aprendidas…"
+                placeholder="Describe la investigación y su resultado…"
+                maxLength={4000}
+                disabled={!canUpdate && !canClose}
               />
-            </div>
-            <div className="flex flex-wrap gap-1.5">
-              {PRIORITIES.map((value) => (
-                <span key={value} className={`chip ${INCIDENT_PRIORITY_STYLES[value]}`}>
-                  {value}
-                </span>
-              ))}
+              {['resolved', 'closed'].includes(form.status) && !form.resolution.trim() && <p className="mt-1 text-xs text-amber-400">Escribe una resolución para guardar este estado.</p>}
             </div>
           </div>
         )}

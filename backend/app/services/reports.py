@@ -359,7 +359,7 @@ def _render_pdf(data: dict[str, Any], path: Path) -> None:
 
     if data["incidents"]:
         story.append(Paragraph("Incidentes del periodo", styles["h2"]))
-        rows = [["Ticket", "Título", "Estado", "Prioridad", "Responsable"]]
+        rows = [["ID local", "Título", "Estado", "Prioridad", "Responsable"]]
         rows += [
             [i.get("ticket_id") or "-", Paragraph(str(i["title"])[:90], styles["small"]),
              STATUS_ES.get(str(i["status"]), str(i["status"])), str(i["priority"]), i["assignee"]]
@@ -497,7 +497,7 @@ def _render_docx(data: dict[str, Any], path: Path) -> None:
         doc.add_heading("Incidentes del periodo", level=1)
         table = doc.add_table(rows=1, cols=5)
         table.style = "Light Grid Accent 1"
-        for cell, text in zip(table.rows[0].cells, ("Ticket", "Título", "Estado", "Prioridad", "Responsable")):
+        for cell, text in zip(table.rows[0].cells, ("ID local", "Título", "Estado", "Prioridad", "Responsable")):
             cell.text = text
         for incident in data["incidents"][:20]:
             cells = table.add_row().cells
@@ -671,7 +671,7 @@ def _render_xlsx(data: dict[str, Any], path: Path) -> None:
     ws6 = wb.create_sheet("Incidentes")
     _write_sheet(
         ws6, "Incidentes del periodo",
-        ["Ticket", "Título", "Estado", "Prioridad", "Responsable", "Apertura"],
+        ["ID local", "Título", "Estado", "Prioridad", "Responsable", "Apertura"],
         [[i.get("ticket_id") or "-", i["title"], STATUS_ES.get(str(i["status"]), str(i["status"])),
           i["priority"], i["assignee"], i["opened_at"].strftime("%Y-%m-%d %H:%M")]
          for i in data["incidents"]],

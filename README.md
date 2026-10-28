@@ -221,6 +221,21 @@ El canal en vivo usa memoria local y requiere un único proceso de backend; para
 necesitaría un sistema compartido de publicación de eventos. El workflow anterior no es necesario
 para esta simulación.
 
+### Recorrido del analista
+
+1. Abre una alerta y revisa su evidencia y el resultado del triaje. Registra tu validación; puedes
+   corregirla si encuentras evidencia nueva.
+2. Selecciona **Crear incidente**, revisa el título y la prioridad inicial y crea el caso. Se asigna
+   inicialmente a tu usuario y puedes abrirlo directamente desde la alerta.
+3. En el incidente, asigna un responsable activo, actualiza su estado y registra las notas. Para
+   marcarlo como resuelto o cerrado se requiere el permiso `incidents:close` y una resolución.
+
+El identificador `INC-…` es local a SOC-Lite; no se crea un ticket externo en osTicket. Los IDs
+`OSK-…` presentes en datos anteriores también son registros locales de demostración.
+Para bases de datos existentes creadas antes de este flujo, `make migrate-analyst` agrega una vez
+el permiso de cierre al rol analista; no cambia otros roles. Las nuevas bases lo incluyen en el seed.
+Si ya tenías sesión iniciada, vuelve a entrar para actualizar los permisos en la interfaz.
+
 ### Recuperar un triaje
 
 Si el triaje y su respaldo no pueden completarse, la alerta queda guardada con estado **Error de
